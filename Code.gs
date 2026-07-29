@@ -36,6 +36,11 @@ function configurarInicial() {
     sheet.appendRow(HEADERS);
     sheet.setFrozenRows(1);
   }
+  // Trava as colunas de data/hora como TEXTO puro, para o Sheets não converter
+  // "2026-07-29" automaticamente num valor de data (o que bagunça fuso horário
+  // e formatação quando lido de volta pelo Apps Script).
+  sheet.getRange('C2:D1000').setNumberFormat('@');
+  sheet.getRange('N2:N1000').setNumberFormat('@');
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty('DASHBOARD_PASSWORD')) {
     props.setProperty('DASHBOARD_PASSWORD', 'vegas2026');
@@ -134,7 +139,14 @@ function criarSolicitacao_(data) {
   var id = Utilities.getUuid();
   var numero = proximoNumero_();
   var now = new Date();
-  sh.appendRow([
+  var newRow = sh.getLastRow() + 1;
+
+  // Formata a linha inteira como texto ANTES de escrever, para as colunas de
+  // data (C = timestamp, D = data) não serem convertidas em valores de data
+  // nativos do Sheets (o que causava o bug de fuso horário / texto quebrado).
+  sh.getRange(newRow, 3, 1, 2).setNumberFormat('@');
+
+  sh.getRange(newRow, 1, 1, HEADERS.length).setValues([[
     id,
     numero,
     now.toISOString(),
@@ -150,7 +162,7 @@ function criarSolicitacao_(data) {
     '',
     '',
     ''
-  ]);
+  ]]);
   return { ok: true, id: id, numero: numero };
 }
 
@@ -176,6 +188,7 @@ function aprovarSolicitacao_(data) {
   if (row === -1) return { ok: false, error: 'Solicitação não encontrada.' };
 
   var now = new Date();
+  sh.getRange(row, 14).setNumberFormat('@'); // trava dataAprovacao como texto
   sh.getRange(row, 12).setValue('Aprovado');       // status
   sh.getRange(row, 13).setValue(data.diretor || ''); // diretor
   sh.getRange(row, 14).setValue(now.toISOString());  // dataAprovacao

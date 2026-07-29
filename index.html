@@ -234,7 +234,7 @@
           <div class="field"><label>Data</label><input type="date" id="fData" required></div>
           <div class="field"><label>Solicitante</label><input type="text" id="fSolicitante" placeholder="Nome(s)" required></div>
           <div class="field"><label>Setor</label><input type="text" id="fSetor" placeholder="Ex: Frota de Veículos" required></div>
-          <div class="field"><label>Veículo / Placa</label><input type="text" id="fVeiculo" placeholder="Ex: Palio - FOT6A75" required></div>
+          <div class="field"><label>Veículo / Placa</label><input type="text" id="fVeiculo" placeholder="Ex: Palio Faire - FOT6A75" required></div>
         </div>
 
         <div class="subhead">Descrição do Problema</div>
@@ -329,8 +329,11 @@
 <div class="toast-wrap" id="toastWrap"></div>
 
 <script>
-
-const API_URL = "https://script.google.com/macros/s/AKfycbzg_t93LNvfp2JSeVSnQWyTNCQvAE9rANIAsaBS_U3aWd16Ij0CLIPVRDW3cwnluHu8/exec";
+/* ======================================================================
+   CONFIGURAÇÃO
+   Cole aqui a URL do App da Web publicado a partir do Code.gs
+   ====================================================================== */
+const API_URL = "COLE_AQUI_A_URL_DO_APP_DA_WEB";
 
 /* ---------------- estado ---------------- */
 let pendentes = [];
@@ -347,8 +350,10 @@ function fmtBRL(v){
 }
 function fmtDate(d){
   if(!d) return '';
-  const [y,m,day] = d.split('-');
-  return day && m && y ? `${day}/${m}/${y}` : d;
+  // aceita tanto "2026-07-29" quanto um ISO completo ("2026-07-29T03:00:00.000Z")
+  const datePart = String(d).split('T')[0];
+  const [y,m,day] = datePart.split('-');
+  return day && m && y ? `${day}/${m}/${y}` : String(d);
 }
 function toast(msg, isError){
   const el = document.createElement('div');
