@@ -303,9 +303,8 @@
   <div class="modal">
     <h3>Aprovar Orçamento</h3>
     <div class="sub" id="approveSub"></div>
-    <div class="field-row">
+    <div class="field-row two">
       <div class="field"><label>Diretor(a) responsável</label><input type="text" id="apDiretor" placeholder="Nome"></div>
-      <div class="field"><label>Senha</label><input type="password" id="apSenha"></div>
     </div>
     <div class="field" style="margin-top:12px;">
       <label>Fornecedor de Peça aprovado</label>
@@ -700,7 +699,6 @@ function openApprove(id){
   const r = pendentes.find(p=>p.id===id);
   document.getElementById('approveSub').textContent = `Solicitação Nº ${r.numero} · ${r.veiculo}`;
   document.getElementById('apDiretor').value = '';
-  document.getElementById('apSenha').value = '';
   document.getElementById('apErr').textContent = '';
   document.getElementById('apPecasOptions').innerHTML = supplierChoiceHtml(r.pecas, 'apPeca');
   document.getElementById('apMaoObraOptions').innerHTML = supplierChoiceHtml(r.maoObra, 'apMaoObra');
@@ -711,7 +709,6 @@ document.getElementById('apCancel').onclick = () => approveOverlay.classList.rem
 
 document.getElementById('apConfirm').onclick = async () => {
   const diretor = document.getElementById('apDiretor').value.trim();
-  const senha = document.getElementById('apSenha').value;
   const errEl = document.getElementById('apErr');
   const r = pendentes.find(p=>p.id===approveTargetId);
   if(!diretor){ errEl.textContent = 'Informe o nome do diretor responsável.'; return; }
@@ -729,16 +726,15 @@ document.getElementById('apConfirm').onclick = async () => {
   }
 
   if(!hasSig){ errEl.textContent = 'É necessário assinar antes de confirmar.'; return; }
-  if(!senha){ errEl.textContent = 'Informe a senha.'; return; }
   errEl.textContent = 'Confirmando...';
   const assinatura = canvas.toDataURL('image/png');
-  const res = await api('approve', {id: approveTargetId, diretor, senha, assinatura, pecaEscolhida, maoObraEscolhida});
+  const res = await api('approve', {id: approveTargetId, diretor, assinatura, pecaEscolhida, maoObraEscolhida});
   if(res.ok){
     approveOverlay.classList.remove('open');
     toast('Orçamento aprovado e assinado com sucesso.');
     await loadAll();
   } else {
-    errEl.textContent = res.error || 'Senha incorreta.';
+    errEl.textContent = res.error || 'Erro ao aprovar.';
   }
 };
 
