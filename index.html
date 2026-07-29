@@ -182,6 +182,15 @@
   .modal h3{margin:0 0 4px;}
   .modal .sub{font-size:12px;color:var(--muted);margin-bottom:18px;}
   .modal .field-row{grid-template-columns:1fr 1fr;}
+  .choice-group{display:flex;flex-direction:column;gap:6px;margin-top:4px;}
+  .choice-row{
+    display:flex;align-items:center;gap:10px;
+    background:var(--bg-alt);border:1px solid var(--line);padding:8px 10px;
+    font-size:13px;cursor:pointer;
+  }
+  .choice-row:hover{border-color:var(--silver);}
+  .choice-row input{accent-color:var(--live);width:15px;height:15px;flex:none;}
+  .choice-row .choice-nome{flex:1;color:var(--silver-bright);}
   canvas#sigPad{width:100%;height:140px;background:var(--bg-alt);border:1px solid var(--line);touch-action:none;}
   .sig-actions{display:flex;justify-content:space-between;align-items:center;margin-top:8px;margin-bottom:18px;}
   .sig-actions span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
@@ -299,6 +308,14 @@
       <div class="field"><label>Senha</label><input type="password" id="apSenha"></div>
     </div>
     <div class="field" style="margin-top:12px;">
+      <label>Fornecedor de Peça aprovado</label>
+      <div class="choice-group" id="apPecasOptions"></div>
+    </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Fornecedor de Mão de Obra aprovado</label>
+      <div class="choice-group" id="apMaoObraOptions"></div>
+    </div>
+    <div class="field" style="margin-top:12px;">
       <label>Assinatura</label>
       <canvas id="sigPad"></canvas>
       <div class="sig-actions">
@@ -330,7 +347,7 @@
 
 <script>
 
-const API_URL = "https://script.google.com/macros/s/AKfycbytFrvxYaxgwkUk7o_zkU-Q6XFL27TCrzxcgsAerIy9CnFwQ9I-yQoaDct5wT7SOrQn/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbw9jnHhFUOXxVeXc53X-ObZOagyWYIAO7C-ieiWeMNnNAL46wvF6xHLUVBWtMbfmtE3/exec";
 
 /* ---------------- estado ---------------- */
 let pendentes = [];
@@ -522,6 +539,14 @@ document.getElementById('reqForm').onsubmit = async (e) => {
 };
 
 /* ---------------- renderização: pendentes ---------------- */
+function chosenSupplierHtml(label, item){
+  if(!item) return `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${label}: não informado.</div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-bottom:8px;">
+    <span><b style="color:var(--silver-bright);">${label}:</b> ${escapeHtml(item.nome)}</span>
+    <span class="price-val ${item.status||''}">${fmtBRL(item.valor)}</span>
+  </div>`;
+}
+
 function priceRowsHtml(items){
   if(!items || !items.length) return '<div style="font-size:12px;color:var(--muted);">Nenhum fornecedor informado.</div>';
   return `<table class="price-table"><thead><tr><th>Fornecedor</th><th style="text-align:right;">Valor</th></tr></thead><tbody>
@@ -613,8 +638,8 @@ function renderDash(){
         <span><b>Setor:</b> ${escapeHtml(r.setor)}</span>
       </div>
       <ol class="desc-list">${(r.descricao||[]).map(d=>`<li>${escapeHtml(d)}</li>`).join('')}</ol>
-      ${priceRowsHtml(r.pecas)}
-      ${priceRowsHtml(r.maoObra)}
+      ${chosenSupplierHtml('Fornecedor Peça', r.pecaEscolhida)}
+      ${chosenSupplierHtml('Fornecedor Mão de Obra', r.maoObraEscolhida)}
       <div class="approved-tag">
         <span>Aprovado por <span class="name">${escapeHtml(r.diretor||'')}</span> em ${r.dataAprovacao ? new Date(r.dataAprovacao).toLocaleString('pt-BR') : ''}</span>
       </div>
@@ -656,6 +681,17 @@ document.getElementById('clearSig').onclick = () => {
   ctx.clearRect(0,0,canvas.width,canvas.height); hasSig = false;
 };
 
+function supplierChoiceHtml(items, groupName){
+  if(!items || !items.length) return '<div style="font-size:12px;color:var(--muted);">Nenhum fornecedor informado.</div>';
+  return items.map((it,idx)=>`
+    <label class="choice-row">
+      <input type="radio" name="${groupName}" value="${idx}" ${items.length===1?'checked':''}>
+      <span class="choice-nome">${escapeHtml(it.nome)}</span>
+      <span class="price-val ${it.status||''}">${fmtBRL(it.valor)}</span>
+    </label>
+  `).join('');
+}
+
 function openApprove(id){
   approveTargetId = id;
   const r = pendentes.find(p=>p.id===id);
@@ -663,6 +699,8 @@ function openApprove(id){
   document.getElementById('apDiretor').value = '';
   document.getElementById('apSenha').value = '';
   document.getElementById('apErr').textContent = '';
+  document.getElementById('apPecasOptions').innerHTML = supplierChoiceHtml(r.pecas, 'apPeca');
+  document.getElementById('apMaoObraOptions').innerHTML = supplierChoiceHtml(r.maoObra, 'apMaoObra');
   approveOverlay.classList.add('open');
   setTimeout(()=>{ setupCanvas(); ctx.clearRect(0,0,canvas.width,canvas.height); hasSig=false; }, 30);
 }
@@ -672,12 +710,26 @@ document.getElementById('apConfirm').onclick = async () => {
   const diretor = document.getElementById('apDiretor').value.trim();
   const senha = document.getElementById('apSenha').value;
   const errEl = document.getElementById('apErr');
+  const r = pendentes.find(p=>p.id===approveTargetId);
   if(!diretor){ errEl.textContent = 'Informe o nome do diretor responsável.'; return; }
+
+  let pecaEscolhida = null, maoObraEscolhida = null;
+  if(r && r.pecas && r.pecas.length){
+    const sel = document.querySelector('input[name="apPeca"]:checked');
+    if(!sel){ errEl.textContent = 'Escolha o fornecedor de peça aprovado.'; return; }
+    pecaEscolhida = r.pecas[parseInt(sel.value,10)];
+  }
+  if(r && r.maoObra && r.maoObra.length){
+    const sel = document.querySelector('input[name="apMaoObra"]:checked');
+    if(!sel){ errEl.textContent = 'Escolha o fornecedor de mão de obra aprovado.'; return; }
+    maoObraEscolhida = r.maoObra[parseInt(sel.value,10)];
+  }
+
   if(!hasSig){ errEl.textContent = 'É necessário assinar antes de confirmar.'; return; }
   if(!senha){ errEl.textContent = 'Informe a senha.'; return; }
   errEl.textContent = 'Confirmando...';
   const assinatura = canvas.toDataURL('image/png');
-  const res = await api('approve', {id: approveTargetId, diretor, senha, assinatura});
+  const res = await api('approve', {id: approveTargetId, diretor, senha, assinatura, pecaEscolhida, maoObraEscolhida});
   if(res.ok){
     approveOverlay.classList.remove('open');
     toast('Orçamento aprovado e assinado com sucesso.');
@@ -729,26 +781,28 @@ function exportPdf(id){
   (r.descricao||[]).forEach((d,i)=>{ doc.text(`${i+1}- ${d}`, marginX+10, y); y += 14; });
   y += 8;
 
-  function table(title, items){
+  function chosenLine(title, item){
     doc.setFont('helvetica','bold'); doc.text(title, marginX, y); y += 6;
-    const colors = {ok:[57,195,122], alt:[224,178,60], alto:[226,84,63]};
-    (items||[]).forEach(it=>{
-      y += 14;
-      doc.setFont('helvetica','normal');
-      doc.text(it.nome || '', marginX+10, y);
-      const val = fmtBRL(it.valor);
-      const c = colors[it.status] || [200,200,200];
+    y += 14;
+    doc.setFont('helvetica','normal');
+    if(item){
+      doc.text(item.nome || '', marginX+10, y);
+      const val = fmtBRL(item.valor);
+      const colors = {ok:[57,195,122], alt:[224,178,60], alto:[226,84,63]};
+      const c = colors[item.status] || [200,200,200];
       doc.setFillColor(c[0],c[1],c[2]);
       const w = doc.getTextWidth(val) + 12;
       doc.rect(pageW-marginX-w, y-10, w, 14, 'F');
       doc.setTextColor(255,255,255);
       doc.text(val, pageW-marginX-w+6, y);
       doc.setTextColor(0,0,0);
-    });
+    } else {
+      doc.text('Não informado', marginX+10, y);
+    }
     y += 14;
   }
-  table('Fornecedor Peça', r.pecas);
-  table('Fornecedor Mão de Obra', r.maoObra);
+  chosenLine('Fornecedor Peça (aprovado):', r.pecaEscolhida);
+  chosenLine('Fornecedor Mão de Obra (aprovado):', r.maoObraEscolhida);
 
   if(r.obs){
     y += 6; doc.setFont('helvetica','bold'); doc.text('Obs:', marginX, y); y += 14;

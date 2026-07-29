@@ -21,7 +21,8 @@ var SHEET_NAME = 'Solicitacoes';
 var HEADERS = [
   'id', 'numero', 'timestamp', 'data', 'solicitante', 'setor', 'veiculo',
   'descricaoJSON', 'pecasJSON', 'maoObraJSON', 'obs',
-  'status', 'diretor', 'dataAprovacao', 'assinatura'
+  'status', 'diretor', 'dataAprovacao', 'assinatura',
+  'pecaEscolhidaJSON', 'maoObraEscolhidaJSON'
 ];
 
 // ---------- SETUP ----------
@@ -35,6 +36,8 @@ function configurarInicial() {
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(HEADERS);
     sheet.setFrozenRows(1);
+  } else {
+    migrarCabecalho_(sheet);
   }
   // Trava as colunas de data/hora como TEXTO puro, para o Sheets não converter
   // "2026-07-29" automaticamente num valor de data (o que bagunça fuso horário
@@ -47,6 +50,19 @@ function configurarInicial() {
   }
   var counter = props.getProperty('CONTADOR');
   if (!counter) props.setProperty('CONTADOR', '0');
+}
+
+// Garante que planilhas já implantadas anteriormente ganhem as colunas novas
+// (ex.: pecaEscolhidaJSON / maoObraEscolhidaJSON) sem apagar dados existentes.
+function migrarCabecalho_(sheet) {
+  var lastCol = Math.max(sheet.getLastColumn(), HEADERS.length);
+  var headerRange = sheet.getRange(1, 1, 1, lastCol);
+  var atuais = headerRange.getValues()[0];
+  HEADERS.forEach(function (h, i) {
+    if (atuais[i] !== h) {
+      sheet.getRange(1, i + 1).setValue(h);
+    }
+  });
 }
 
 function definirSenha(novaSenha) {
@@ -123,6 +139,11 @@ function rowToObj_(row, headers) {
     try { obj[outKey] = obj[key] ? JSON.parse(obj[key]) : []; }
     catch (e) { obj[outKey] = []; }
   });
+  ['pecaEscolhidaJSON', 'maoObraEscolhidaJSON'].forEach(function (key) {
+    var outKey = key.replace('JSON', '');
+    try { obj[outKey] = obj[key] ? JSON.parse(obj[key]) : null; }
+    catch (e) { obj[outKey] = null; }
+  });
   return obj;
 }
 
@@ -161,6 +182,8 @@ function criarSolicitacao_(data) {
     'Pendente',
     '',
     '',
+    '',
+    '',
     ''
   ]]);
   return { ok: true, id: id, numero: numero };
@@ -193,6 +216,8 @@ function aprovarSolicitacao_(data) {
   sh.getRange(row, 13).setValue(data.diretor || ''); // diretor
   sh.getRange(row, 14).setValue(now.toISOString());  // dataAprovacao
   sh.getRange(row, 15).setValue(data.assinatura || ''); // assinatura (dataURL base64)
+  sh.getRange(row, 16).setValue(JSON.stringify(data.pecaEscolhida || null));    // fornecedor de peça escolhido
+  sh.getRange(row, 17).setValue(JSON.stringify(data.maoObraEscolhida || null)); // fornecedor de mão de obra escolhido
   return { ok: true };
 }
 
