@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vegas · Aprovação de Manutenção</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0a0b0d;
+    --bg-alt:#0d0f12;
+    --surface:#15181c;
+    --surface-2:#1c2126;
+    --line:#31363d;
+    --line-soft:#22262b;
+    --silver:#b7bec6;
+    --silver-bright:#f2f4f6;
+    --muted:#6d7681;
+    --live:#6fd7dc;
+    --ok:#39c37a;
+    --ok-bg:rgba(57,195,122,.12);
+    --warn:#e0b23c;
+    --warn-bg:rgba(224,178,60,.12);
+    --danger:#e2543f;
+    --danger-bg:rgba(226,84,63,.12);
+    --facet:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at top, #14171b 0%, var(--bg) 60%);
+    color:var(--silver);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+  }
+  ::selection{background:var(--live);color:#04211f;}
+  h1,h2,h3,.display{font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:.02em;color:var(--silver-bright);}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  a{color:inherit;}
+  button{font-family:'Rajdhani',sans-serif;cursor:pointer;}
+  input,textarea,select{font-family:'Inter',sans-serif;}
+
+  /* ---------- topbar ---------- */
+  .topbar{
+    position:sticky;top:0;z-index:30;
+    display:flex;align-items:center;gap:24px;
+    padding:14px 28px;
+    background:linear-gradient(180deg, rgba(13,15,18,.97), rgba(13,15,18,.9));
+    border-bottom:1px solid var(--line);
+    backdrop-filter:blur(6px);
+    overflow:hidden;
+  }
+  .topbar::after{
+    content:"";position:absolute;top:0;left:-40%;width:40%;height:100%;
+    background:linear-gradient(90deg, transparent, rgba(111,215,220,.16), transparent);
+    animation:sweep 1.4s ease-out 1;
+  }
+  @media (prefers-reduced-motion:reduce){ .topbar::after{animation:none;} }
+  @keyframes sweep{ from{left:-40%;} to{left:110%;} }
+  .brand{display:flex;align-items:center;gap:14px;}
+  .brand img{height:34px;width:auto;filter:drop-shadow(0 0 6px rgba(255,255,255,.08));}
+  .brand .divider{width:1px;height:26px;background:var(--line);}
+  .brand .subtitle{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);}
+  .nav{display:flex;gap:6px;margin-left:auto;}
+  .nav button{
+    background:transparent;border:1px solid transparent;color:var(--muted);
+    padding:9px 16px;font-size:14px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;
+    border-radius:1px;
+  }
+  .nav button.active{color:var(--silver-bright);border-color:var(--line);background:var(--surface);}
+  .nav button:hover:not(.active){color:var(--silver);}
+  .clock{font-size:12px;color:var(--muted);letter-spacing:.03em;white-space:nowrap;}
+  .clock .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--live);margin-right:6px;box-shadow:0 0 6px var(--live);}
+
+  main{max-width:1080px;margin:0 auto;padding:32px 24px 80px;}
+  .view{display:none;} .view.active{display:block;}
+
+  .section-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap;}
+  .section-head h2{font-size:22px;margin:0;}
+  .section-head .count{font-size:12px;color:var(--muted);}
+
+  .facet-panel{
+    background:var(--surface);
+    border:1px solid var(--line);
+    clip-path:polygon(var(--facet) 0, 100% 0, 100% calc(100% - var(--facet)), calc(100% - var(--facet)) 100%, 0 100%, 0 var(--facet));
+    padding:22px 24px;
+    margin-bottom:20px;
+  }
+
+  .btn{
+    background:var(--surface-2);border:1px solid var(--line);color:var(--silver-bright);
+    padding:10px 18px;font-size:14px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  }
+  .btn:hover{border-color:var(--silver);}
+  .btn-primary{background:var(--live);color:#04211f;border-color:var(--live);}
+  .btn-primary:hover{filter:brightness(1.08);}
+  .btn-ghost{background:transparent;}
+  .btn-danger{background:var(--danger-bg);color:var(--danger);border-color:rgba(226,84,63,.4);}
+  .btn-sm{padding:7px 12px;font-size:12px;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  /* ---------- new request toggle + form ---------- */
+  #toggleForm{margin-bottom:20px;}
+  #formPanel{display:none;}
+  #formPanel.open{display:block;}
+  .field-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;}
+  .field-row.two{grid-template-columns:repeat(2,1fr);}
+  .field{display:flex;flex-direction:column;gap:6px;}
+  .field label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+  .field input,.field textarea,.field select{
+    background:var(--bg-alt);border:1px solid var(--line);color:var(--silver-bright);
+    padding:9px 10px;font-size:14px;
+  }
+  .field textarea{resize:vertical;min-height:60px;}
+  .field input:focus,.field textarea:focus,.field select:focus{outline:2px solid var(--live);outline-offset:1px;border-color:var(--live);}
+
+  .subhead{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--silver-bright);margin:20px 0 10px;padding-top:14px;border-top:1px solid var(--line-soft);}
+  .dyn-row{display:flex;gap:10px;align-items:flex-end;margin-bottom:10px;}
+  .dyn-row .field{flex:1;}
+  .dyn-row .status-picker{display:flex;gap:4px;padding-bottom:2px;}
+  .dot-btn{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);background:transparent;padding:0;}
+  .dot-btn[data-c="ok"]{background:var(--ok);border-color:var(--ok);}
+  .dot-btn[data-c="alt"]{background:var(--warn);border-color:var(--warn);}
+  .dot-btn[data-c="alto"]{background:var(--danger);border-color:var(--danger);}
+  .dot-btn.sel{outline:2px solid var(--silver-bright);outline-offset:2px;}
+  .remove-row{background:transparent;border:none;color:var(--muted);font-size:18px;line-height:1;padding:8px;}
+  .remove-row:hover{color:var(--danger);}
+  .add-link{background:transparent;border:1px dashed var(--line);color:var(--muted);padding:8px 14px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;width:100%;margin-top:4px;}
+  .add-link:hover{color:var(--live);border-color:var(--live);}
+
+  /* ---------- cards ---------- */
+  .card-grid{display:grid;gap:16px;}
+  .card{
+    background:var(--surface);border:1px solid var(--line);
+    clip-path:polygon(var(--facet) 0, 100% 0, 100% calc(100% - var(--facet)), calc(100% - var(--facet)) 100%, 0 100%, 0 var(--facet));
+    padding:20px 22px;
+  }
+  .card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px;}
+  .card-top .numero{font-size:12px;color:var(--live);letter-spacing:.05em;}
+  .card-top .veiculo{font-size:17px;color:var(--silver-bright);font-weight:700;font-family:'Rajdhani',sans-serif;}
+  .card-meta{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:14px;}
+  .card-meta b{color:var(--silver);font-weight:600;}
+  .desc-list{margin:0 0 14px;padding-left:18px;font-size:13px;color:var(--silver);}
+  .desc-list li{margin-bottom:3px;}
+  .price-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px;}
+  .price-table th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--line-soft);}
+  .price-table td{padding:6px;border-bottom:1px solid var(--line-soft);}
+  .price-table tr:last-child td{border-bottom:none;}
+  .price-val{font-family:'JetBrains Mono',monospace;text-align:right;padding:2px 8px;display:inline-block;}
+  .price-val.ok{background:var(--ok-bg);color:var(--ok);}
+  .price-val.alt{background:var(--warn-bg);color:var(--warn);}
+  .price-val.alto{background:var(--danger-bg);color:var(--danger);}
+  .card-obs{font-size:12px;color:var(--muted);font-style:italic;margin-bottom:14px;}
+  .card-actions{display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--line-soft);padding-top:14px;}
+  .approved-tag{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:10px;}
+  .approved-tag .name{color:var(--silver-bright);font-weight:600;}
+  .sig-thumb{height:34px;border-bottom:1px solid var(--line);}
+  .empty{text-align:center;padding:50px 20px;color:var(--muted);font-size:13px;}
+  .empty b{display:block;color:var(--silver);font-size:15px;margin-bottom:6px;font-family:'Rajdhani',sans-serif;}
+
+  /* ---------- lock ---------- */
+  .lock-screen{max-width:340px;margin:60px auto;text-align:center;}
+  .lock-screen .facet-panel{text-align:left;}
+  .lock-screen h3{margin-top:0;font-size:18px;}
+  .err-msg{color:var(--danger);font-size:12px;margin-top:8px;min-height:16px;}
+
+  /* ---------- modal ---------- */
+  .overlay{
+    position:fixed;inset:0;background:rgba(6,7,9,.75);backdrop-filter:blur(3px);
+    display:none;align-items:center;justify-content:center;z-index:50;padding:20px;
+  }
+  .overlay.open{display:flex;}
+  .modal{
+    background:var(--surface);border:1px solid var(--line);width:100%;max-width:520px;max-height:88vh;overflow-y:auto;
+    clip-path:polygon(var(--facet) 0, 100% 0, 100% calc(100% - var(--facet)), calc(100% - var(--facet)) 100%, 0 100%, 0 var(--facet));
+    padding:26px 28px;
+  }
+  .modal h3{margin:0 0 4px;}
+  .modal .sub{font-size:12px;color:var(--muted);margin-bottom:18px;}
+  .modal .field-row{grid-template-columns:1fr 1fr;}
+  canvas#sigPad{width:100%;height:140px;background:var(--bg-alt);border:1px solid var(--line);touch-action:none;}
+  .sig-actions{display:flex;justify-content:space-between;align-items:center;margin-top:8px;margin-bottom:18px;}
+  .sig-actions span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:6px;}
+
+  .toast-wrap{position:fixed;bottom:22px;right:22px;z-index:80;display:flex;flex-direction:column;gap:8px;}
+  .toast{
+    background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--ok);
+    color:var(--silver-bright);padding:12px 18px;font-size:13px;
+    animation:toastIn .25s ease-out;
+  }
+  .toast.error{border-left-color:var(--danger);}
+  @keyframes toastIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+  @media (max-width:700px){
+    .field-row{grid-template-columns:1fr 1fr;}
+    .field-row.two{grid-template-columns:1fr;}
+    .topbar{padding:12px 16px;gap:12px;}
+    .brand .subtitle{display:none;}
+    .clock{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <img src="assets/logovegas.png" alt="Vegas Vigilância e Segurança">
+    <div class="divider"></div>
+    <div class="subtitle">Aprovação de<br>Orçamentos</div>
+  </div>
+  <nav class="nav">
+    <button id="navPend" class="active">Pendentes</button>
+    <button id="navDash">Dashboard</button>
+  </nav>
+  <div class="clock mono"><span class="dot"></span><span id="clockText">--/--/---- --:--:--</span></div>
+</header>
+
+<main>
+
+  <!-- ===================== VIEW: PENDENTES ===================== -->
+  <section id="viewPendentes" class="view active">
+
+    <button id="toggleForm" class="btn btn-primary">+ Nova Solicitação</button>
+
+    <div id="formPanel" class="facet-panel">
+      <h2 style="margin-top:0;font-size:18px;">Solicitação de Aprovação de Manutenção</h2>
+      <form id="reqForm">
+        <div class="field-row">
+          <div class="field"><label>Data</label><input type="date" id="fData" required></div>
+          <div class="field"><label>Solicitante</label><input type="text" id="fSolicitante" placeholder="Nome(s)" required></div>
+          <div class="field"><label>Setor</label><input type="text" id="fSetor" placeholder="Ex: Frota de Veículos" required></div>
+          <div class="field"><label>Veículo / Placa</label><input type="text" id="fVeiculo" placeholder="Ex: Palio Faire - FOT6A75" required></div>
+        </div>
+
+        <div class="subhead">Descrição do Problema</div>
+        <div id="descList"></div>
+        <button type="button" class="add-link" id="addDesc">+ adicionar item</button>
+
+        <div class="subhead">Fornecedor · Peça</div>
+        <div id="pecasList"></div>
+        <button type="button" class="add-link" id="addPeca">+ adicionar fornecedor de peça</button>
+
+        <div class="subhead">Fornecedor · Mão de Obra</div>
+        <div id="maoObraList"></div>
+        <button type="button" class="add-link" id="addMaoObra">+ adicionar fornecedor de mão de obra</button>
+
+        <div class="subhead">Observações</div>
+        <div class="field"><textarea id="fObs" placeholder="Observações gerais (opcional)"></textarea></div>
+
+        <div class="modal-actions" style="margin-top:18px;">
+          <button type="button" class="btn btn-ghost" id="cancelForm">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Enviar para Aprovação</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="section-head">
+      <h2>Aguardando Assinatura</h2>
+      <span class="count mono" id="pendCount">0 solicitações</span>
+    </div>
+    <div class="card-grid" id="pendList"></div>
+  </section>
+
+  <!-- ===================== VIEW: DASHBOARD ===================== -->
+  <section id="viewDashboard" class="view">
+    <div class="lock-screen" id="lockScreen">
+      <div class="facet-panel">
+        <h3>Acesso restrito</h3>
+        <div class="sub" style="font-size:12px;color:var(--muted);margin-bottom:14px;">Informe a senha da diretoria para abrir o dashboard de solicitações aprovadas.</div>
+        <div class="field"><label>Senha</label><input type="password" id="dashPass"></div>
+        <div class="err-msg" id="dashErr"></div>
+        <button class="btn btn-primary" id="dashEnter" style="width:100%;margin-top:12px;">Entrar</button>
+      </div>
+    </div>
+
+    <div id="dashContent" style="display:none;">
+      <div class="section-head">
+        <h2>Solicitações Aprovadas</h2>
+        <span class="count mono" id="dashCount">0 registros</span>
+      </div>
+      <div class="card-grid" id="dashList"></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===================== MODAL: APROVAR ===================== -->
+<div class="overlay" id="approveOverlay">
+  <div class="modal">
+    <h3>Aprovar Orçamento</h3>
+    <div class="sub" id="approveSub"></div>
+    <div class="field-row">
+      <div class="field"><label>Diretor(a) responsável</label><input type="text" id="apDiretor" placeholder="Nome"></div>
+      <div class="field"><label>Senha</label><input type="password" id="apSenha"></div>
+    </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Assinatura</label>
+      <canvas id="sigPad"></canvas>
+      <div class="sig-actions">
+        <span>Assine com o mouse ou o dedo</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="clearSig">Limpar</button>
+      </div>
+    </div>
+    <div class="err-msg" id="apErr"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="apCancel">Cancelar</button>
+      <button class="btn btn-primary" id="apConfirm">Confirmar Aprovação</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: CONFIRMAR EXCLUSÃO ===================== -->
+<div class="overlay" id="delOverlay">
+  <div class="modal" style="max-width:400px;">
+    <h3>Excluir registro</h3>
+    <div class="sub">Esta ação remove definitivamente a solicitação do dashboard. Use apenas quando a transação estiver concluída.</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="delCancel">Cancelar</button>
+      <button class="btn btn-danger" id="delConfirm">Excluir Definitivamente</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+
+const API_URL = "https://script.google.com/macros/s/AKfycbzg_t93LNvfp2JSeVSnQWyTNCQvAE9rANIAsaBS_U3aWd16Ij0CLIPVRDW3cwnluHu8/exec";
+
+/* ---------------- estado ---------------- */
+let pendentes = [];
+let aprovados = [];
+let approveTargetId = null;
+let deleteTargetId = null;
+let dashUnlocked = sessionStorage.getItem('vegasDashUnlocked') === '1';
+let dashPassword = sessionStorage.getItem('vegasDashPass') || '';
+
+/* ---------------- utilidades ---------------- */
+function fmtBRL(v){
+  const n = parseFloat(v || 0);
+  return n.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+}
+function fmtDate(d){
+  if(!d) return '';
+  const [y,m,day] = d.split('-');
+  return day && m && y ? `${day}/${m}/${y}` : d;
+}
+function toast(msg, isError){
+  const el = document.createElement('div');
+  el.className = 'toast' + (isError ? ' error' : '');
+  el.textContent = msg;
+  document.getElementById('toastWrap').appendChild(el);
+  setTimeout(()=>el.remove(), 3800);
+}
+async function api(action, payload){
+  if(action === 'list'){
+    const res = await fetch(`${API_URL}?action=list`);
+    return res.json();
+  }
+  const res = await fetch(API_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({action, ...payload})
+  });
+  return res.json();
+}
+
+/* ---------------- relógio ---------------- */
+function tickClock(){
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2,'0');
+  const mm = String(now.getMonth()+1).padStart(2,'0');
+  const yy = now.getFullYear();
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mi = String(now.getMinutes()).padStart(2,'0');
+  const ss = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('clockText').textContent = `${dd}/${mm}/${yy} ${hh}:${mi}:${ss}`;
+}
+tickClock(); setInterval(tickClock, 1000);
+
+/* ---------------- navegação ---------------- */
+const navPend = document.getElementById('navPend');
+const navDash = document.getElementById('navDash');
+const viewPend = document.getElementById('viewPendentes');
+const viewDash = document.getElementById('viewDashboard');
+navPend.onclick = () => showView('pend');
+navDash.onclick = () => showView('dash');
+function showView(v){
+  navPend.classList.toggle('active', v==='pend');
+  navDash.classList.toggle('active', v==='dash');
+  viewPend.classList.toggle('active', v==='pend');
+  viewDash.classList.toggle('active', v==='dash');
+  if(v==='dash'){
+    if(dashUnlocked){ unlockDashboard(false); } else { renderLock(); }
+  }
+}
+
+/* ---------------- formulário: linhas dinâmicas ---------------- */
+let descCount = 0, pecaCount = 0, moCount = 0;
+
+function addDescRow(value=''){
+  descCount++;
+  const id = 'd'+descCount;
+  const wrap = document.createElement('div');
+  wrap.className = 'dyn-row';
+  wrap.id = id;
+  wrap.innerHTML = `
+    <div class="field"><input type="text" placeholder="Ex: Troca do pivô" value="${escapeHtml(value)}"></div>
+    <button type="button" class="remove-row" title="remover">×</button>`;
+  wrap.querySelector('.remove-row').onclick = () => wrap.remove();
+  document.getElementById('descList').appendChild(wrap);
+}
+
+function addSupplierRow(containerId, {nome='', valor='', status='ok'}={}){
+  const id = 'r'+Math.random().toString(36).slice(2,8);
+  const wrap = document.createElement('div');
+  wrap.className = 'dyn-row';
+  wrap.id = id;
+  wrap.innerHTML = `
+    <div class="field"><label>Fornecedor</label><input type="text" class="s-nome" placeholder="Nome" value="${escapeHtml(nome)}"></div>
+    <div class="field" style="max-width:150px;"><label>Valor (R$)</label><input type="number" step="0.01" min="0" class="s-valor" value="${valor}"></div>
+    <div class="field" style="max-width:120px;">
+      <label>Status</label>
+      <div class="status-picker">
+        <button type="button" class="dot-btn" data-c="ok" title="Selecionado"></button>
+        <button type="button" class="dot-btn" data-c="alt" title="Alternativa"></button>
+        <button type="button" class="dot-btn" data-c="alto" title="Alto custo"></button>
+      </div>
+    </div>
+    <button type="button" class="remove-row" title="remover">×</button>`;
+  wrap.dataset.status = status;
+  wrap.querySelectorAll('.dot-btn').forEach(btn=>{
+    if(btn.dataset.c === status) btn.classList.add('sel');
+    btn.onclick = ()=>{
+      wrap.querySelectorAll('.dot-btn').forEach(b=>b.classList.remove('sel'));
+      btn.classList.add('sel');
+      wrap.dataset.status = btn.dataset.c;
+    };
+  });
+  wrap.querySelector('.remove-row').onclick = () => wrap.remove();
+  document.getElementById(containerId).appendChild(wrap);
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('addDesc').onclick = () => addDescRow();
+document.getElementById('addPeca').onclick = () => addSupplierRow('pecasList');
+document.getElementById('addMaoObra').onclick = () => addSupplierRow('maoObraList');
+
+function resetForm(){
+  document.getElementById('reqForm').reset();
+  document.getElementById('descList').innerHTML = '';
+  document.getElementById('pecasList').innerHTML = '';
+  document.getElementById('maoObraList').innerHTML = '';
+  document.getElementById('fData').value = new Date().toISOString().slice(0,10);
+  addDescRow(); addSupplierRow('pecasList'); addSupplierRow('maoObraList');
+}
+
+/* ---------------- toggle painel do formulário ---------------- */
+const toggleFormBtn = document.getElementById('toggleForm');
+const formPanel = document.getElementById('formPanel');
+toggleFormBtn.onclick = () => {
+  const open = formPanel.classList.toggle('open');
+  toggleFormBtn.textContent = open ? '– Fechar Formulário' : '+ Nova Solicitação';
+  if(open && !document.getElementById('descList').children.length) resetForm();
+};
+document.getElementById('cancelForm').onclick = () => {
+  formPanel.classList.remove('open');
+  toggleFormBtn.textContent = '+ Nova Solicitação';
+};
+
+/* ---------------- envio do formulário ---------------- */
+document.getElementById('reqForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const descricao = [...document.querySelectorAll('#descList input')].map(i=>i.value.trim()).filter(Boolean);
+  const pecas = [...document.querySelectorAll('#pecasList .dyn-row')].map(r=>({
+    nome: r.querySelector('.s-nome').value.trim(),
+    valor: r.querySelector('.s-valor').value || 0,
+    status: r.dataset.status
+  })).filter(p=>p.nome);
+  const maoObra = [...document.querySelectorAll('#maoObraList .dyn-row')].map(r=>({
+    nome: r.querySelector('.s-nome').value.trim(),
+    valor: r.querySelector('.s-valor').value || 0,
+    status: r.dataset.status
+  })).filter(p=>p.nome);
+
+  const payload = {
+    data: document.getElementById('fData').value,
+    solicitante: document.getElementById('fSolicitante').value.trim(),
+    setor: document.getElementById('fSetor').value.trim(),
+    veiculo: document.getElementById('fVeiculo').value.trim(),
+    descricao, pecas, maoObra,
+    obs: document.getElementById('fObs').value.trim()
+  };
+
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  try{
+    const res = await api('create', payload);
+    if(res.ok){
+      toast(`Solicitação Nº ${res.numero} enviada para aprovação.`);
+      formPanel.classList.remove('open');
+      toggleFormBtn.textContent = '+ Nova Solicitação';
+      await loadAll();
+    } else {
+      toast(res.error || 'Erro ao enviar solicitação.', true);
+    }
+  } catch(err){
+    toast('Falha de conexão com o servidor.', true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Enviar para Aprovação';
+  }
+};
+
+/* ---------------- renderização: pendentes ---------------- */
+function priceRowsHtml(items){
+  if(!items || !items.length) return '<div style="font-size:12px;color:var(--muted);">Nenhum fornecedor informado.</div>';
+  return `<table class="price-table"><thead><tr><th>Fornecedor</th><th style="text-align:right;">Valor</th></tr></thead><tbody>
+    ${items.map(it=>`<tr><td>${escapeHtml(it.nome)}</td><td style="text-align:right;"><span class="price-val ${it.status||''}">${fmtBRL(it.valor)}</span></td></tr>`).join('')}
+  </tbody></table>`;
+}
+
+function renderPend(){
+  const wrap = document.getElementById('pendList');
+  document.getElementById('pendCount').textContent = `${pendentes.length} solicitaç${pendentes.length===1?'ão':'ões'}`;
+  if(!pendentes.length){
+    wrap.innerHTML = `<div class="empty"><b>Nada pendente</b>Todas as solicitações já foram assinadas e aprovadas.</div>`;
+    return;
+  }
+  wrap.innerHTML = pendentes.map(r => `
+    <div class="card">
+      <div class="card-top">
+        <div>
+          <div class="numero mono">SOLICITAÇÃO Nº ${r.numero}</div>
+          <div class="veiculo">${escapeHtml(r.veiculo)}</div>
+        </div>
+      </div>
+      <div class="card-meta">
+        <span><b>Data:</b> ${fmtDate(r.data)}</span>
+        <span><b>Solicitante:</b> ${escapeHtml(r.solicitante)}</span>
+        <span><b>Setor:</b> ${escapeHtml(r.setor)}</span>
+      </div>
+      <ol class="desc-list">${(r.descricao||[]).map(d=>`<li>${escapeHtml(d)}</li>`).join('')}</ol>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px;">Fornecedor Peça</div>
+      ${priceRowsHtml(r.pecas)}
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:10px 0 4px;">Fornecedor Mão de Obra</div>
+      ${priceRowsHtml(r.maoObra)}
+      ${r.obs ? `<div class="card-obs">Obs: ${escapeHtml(r.obs)}</div>` : ''}
+      <div class="card-actions">
+        <button class="btn btn-primary btn-sm" onclick="openApprove('${r.id}')">Aprovar Orçamento</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ---------------- dashboard ---------------- */
+function renderLock(){
+  document.getElementById('lockScreen').style.display = 'block';
+  document.getElementById('dashContent').style.display = 'none';
+  document.getElementById('dashPass').value = '';
+  document.getElementById('dashErr').textContent = '';
+}
+document.getElementById('dashEnter').onclick = async () => {
+  const pass = document.getElementById('dashPass').value;
+  const errEl = document.getElementById('dashErr');
+  errEl.textContent = 'Verificando...';
+  const res = await api('checkPassword', {senha: pass});
+  if(res.ok){
+    dashUnlocked = true; dashPassword = pass;
+    sessionStorage.setItem('vegasDashUnlocked','1');
+    sessionStorage.setItem('vegasDashPass', pass);
+    unlockDashboard(true);
+  } else {
+    errEl.textContent = 'Senha incorreta.';
+  }
+};
+document.getElementById('dashPass').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('dashEnter').click(); });
+
+async function unlockDashboard(refresh){
+  document.getElementById('lockScreen').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
+  if(refresh) await loadAll();
+  renderDash();
+}
+
+function renderDash(){
+  const wrap = document.getElementById('dashList');
+  document.getElementById('dashCount').textContent = `${aprovados.length} registro${aprovados.length===1?'':'s'}`;
+  if(!aprovados.length){
+    wrap.innerHTML = `<div class="empty"><b>Nenhum registro aprovado</b>Solicitações assinadas pela diretoria aparecem aqui.</div>`;
+    return;
+  }
+  wrap.innerHTML = aprovados.map(r => `
+    <div class="card">
+      <div class="card-top">
+        <div>
+          <div class="numero mono">SOLICITAÇÃO Nº ${r.numero}</div>
+          <div class="veiculo">${escapeHtml(r.veiculo)}</div>
+        </div>
+      </div>
+      <div class="card-meta">
+        <span><b>Data:</b> ${fmtDate(r.data)}</span>
+        <span><b>Solicitante:</b> ${escapeHtml(r.solicitante)}</span>
+        <span><b>Setor:</b> ${escapeHtml(r.setor)}</span>
+      </div>
+      <ol class="desc-list">${(r.descricao||[]).map(d=>`<li>${escapeHtml(d)}</li>`).join('')}</ol>
+      ${priceRowsHtml(r.pecas)}
+      ${priceRowsHtml(r.maoObra)}
+      <div class="approved-tag">
+        <span>Aprovado por <span class="name">${escapeHtml(r.diretor||'')}</span> em ${r.dataAprovacao ? new Date(r.dataAprovacao).toLocaleString('pt-BR') : ''}</span>
+      </div>
+      ${r.assinatura ? `<img class="sig-thumb" src="${r.assinatura}" alt="assinatura">` : ''}
+      <div class="card-actions">
+        <button class="btn btn-ghost btn-sm" onclick="exportPdf('${r.id}')">Exportar PDF</button>
+        <button class="btn btn-danger btn-sm" onclick="openDelete('${r.id}')">Excluir</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ---------------- modal aprovar + assinatura ---------------- */
+const approveOverlay = document.getElementById('approveOverlay');
+const canvas = document.getElementById('sigPad');
+const ctx = canvas.getContext('2d');
+let drawing = false, hasSig = false;
+
+function setupCanvas(){
+  const ratio = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * ratio;
+  canvas.height = rect.height * ratio;
+  ctx.scale(ratio, ratio);
+  ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#f2f4f6';
+}
+function getPos(e){
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return {x: t.clientX - rect.left, y: t.clientY - rect.top};
+}
+function startDraw(e){ drawing = true; hasSig = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); e.preventDefault(); }
+function moveDraw(e){ if(!drawing) return; const p = getPos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); e.preventDefault(); }
+function endDraw(){ drawing = false; }
+['mousedown','touchstart'].forEach(ev=>canvas.addEventListener(ev,startDraw));
+['mousemove','touchmove'].forEach(ev=>canvas.addEventListener(ev,moveDraw));
+['mouseup','mouseleave','touchend'].forEach(ev=>canvas.addEventListener(ev,endDraw));
+document.getElementById('clearSig').onclick = () => {
+  ctx.clearRect(0,0,canvas.width,canvas.height); hasSig = false;
+};
+
+function openApprove(id){
+  approveTargetId = id;
+  const r = pendentes.find(p=>p.id===id);
+  document.getElementById('approveSub').textContent = `Solicitação Nº ${r.numero} · ${r.veiculo}`;
+  document.getElementById('apDiretor').value = '';
+  document.getElementById('apSenha').value = '';
+  document.getElementById('apErr').textContent = '';
+  approveOverlay.classList.add('open');
+  setTimeout(()=>{ setupCanvas(); ctx.clearRect(0,0,canvas.width,canvas.height); hasSig=false; }, 30);
+}
+document.getElementById('apCancel').onclick = () => approveOverlay.classList.remove('open');
+
+document.getElementById('apConfirm').onclick = async () => {
+  const diretor = document.getElementById('apDiretor').value.trim();
+  const senha = document.getElementById('apSenha').value;
+  const errEl = document.getElementById('apErr');
+  if(!diretor){ errEl.textContent = 'Informe o nome do diretor responsável.'; return; }
+  if(!hasSig){ errEl.textContent = 'É necessário assinar antes de confirmar.'; return; }
+  if(!senha){ errEl.textContent = 'Informe a senha.'; return; }
+  errEl.textContent = 'Confirmando...';
+  const assinatura = canvas.toDataURL('image/png');
+  const res = await api('approve', {id: approveTargetId, diretor, senha, assinatura});
+  if(res.ok){
+    approveOverlay.classList.remove('open');
+    toast('Orçamento aprovado e assinado com sucesso.');
+    await loadAll();
+  } else {
+    errEl.textContent = res.error || 'Senha incorreta.';
+  }
+};
+
+/* ---------------- excluir ---------------- */
+const delOverlay = document.getElementById('delOverlay');
+function openDelete(id){ deleteTargetId = id; delOverlay.classList.add('open'); }
+document.getElementById('delCancel').onclick = () => delOverlay.classList.remove('open');
+document.getElementById('delConfirm').onclick = async () => {
+  const res = await api('delete', {id: deleteTargetId, senha: dashPassword});
+  delOverlay.classList.remove('open');
+  if(res.ok){
+    toast('Registro excluído.');
+    await loadAll();
+  } else {
+    toast(res.error || 'Erro ao excluir.', true);
+  }
+};
+
+/* ---------------- exportar pdf ---------------- */
+function exportPdf(id){
+  const r = aprovados.find(a=>a.id===id);
+  if(!r) return;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'pt', format:'a4'});
+  const marginX = 48; let y = 56;
+  const pageW = doc.internal.pageSize.getWidth();
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(15);
+  doc.text('SOLICITAÇÃO DE APROVAÇÃO DE MANUTENÇÃO', pageW/2, y, {align:'center'});
+  y += 10; doc.setLineWidth(1); doc.line(marginX, y, pageW-marginX, y); y += 22;
+
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  const line = (label, value) => { doc.setFont('helvetica','bold'); doc.text(label, marginX, y); doc.setFont('helvetica','normal'); doc.text(String(value||''), marginX+110, y); y += 16; };
+  line('Solicitação Nº:', r.numero);
+  line('Data:', fmtDate(r.data));
+  line('Solicitante:', r.solicitante);
+  line('Setor:', r.setor);
+  line('Veículo / Placa:', r.veiculo);
+  y += 6;
+
+  doc.setFont('helvetica','bold'); doc.text('Descrição do Problema:', marginX, y); y += 16;
+  doc.setFont('helvetica','normal');
+  (r.descricao||[]).forEach((d,i)=>{ doc.text(`${i+1}- ${d}`, marginX+10, y); y += 14; });
+  y += 8;
+
+  function table(title, items){
+    doc.setFont('helvetica','bold'); doc.text(title, marginX, y); y += 6;
+    const colors = {ok:[57,195,122], alt:[224,178,60], alto:[226,84,63]};
+    (items||[]).forEach(it=>{
+      y += 14;
+      doc.setFont('helvetica','normal');
+      doc.text(it.nome || '', marginX+10, y);
+      const val = fmtBRL(it.valor);
+      const c = colors[it.status] || [200,200,200];
+      doc.setFillColor(c[0],c[1],c[2]);
+      const w = doc.getTextWidth(val) + 12;
+      doc.rect(pageW-marginX-w, y-10, w, 14, 'F');
+      doc.setTextColor(255,255,255);
+      doc.text(val, pageW-marginX-w+6, y);
+      doc.setTextColor(0,0,0);
+    });
+    y += 14;
+  }
+  table('Fornecedor Peça', r.pecas);
+  table('Fornecedor Mão de Obra', r.maoObra);
+
+  if(r.obs){
+    y += 6; doc.setFont('helvetica','bold'); doc.text('Obs:', marginX, y); y += 14;
+    doc.setFont('helvetica','normal');
+    const split = doc.splitTextToSize(r.obs, pageW - marginX*2);
+    doc.text(split, marginX, y); y += split.length*13;
+  }
+
+  y += 20;
+  doc.setFont('helvetica','bold'); doc.text('Assinatura do Diretor Responsável:', marginX, y); y += 8;
+  if(r.assinatura){
+    try{ doc.addImage(r.assinatura, 'PNG', marginX, y, 160, 55); }catch(e){}
+  }
+  y += 65;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text(`${r.diretor||''}  ·  aprovado em ${r.dataAprovacao ? new Date(r.dataAprovacao).toLocaleString('pt-BR') : ''}`, marginX, y);
+
+  doc.save(`solicitacao_${r.numero}.pdf`);
+}
+
+/* ---------------- carregar dados ---------------- */
+async function loadAll(){
+  try{
+    const res = await api('list');
+    if(!res.ok) throw new Error(res.error);
+    pendentes = res.items.filter(i=>i.status !== 'Aprovado').sort((a,b)=> b.timestamp.localeCompare(a.timestamp));
+    aprovados = res.items.filter(i=>i.status === 'Aprovado').sort((a,b)=> (b.dataAprovacao||'').localeCompare(a.dataAprovacao||''));
+    renderPend();
+    if(document.getElementById('viewDashboard').classList.contains('active') && dashUnlocked){ renderDash(); }
+  } catch(err){
+    document.getElementById('pendList').innerHTML = `<div class="empty"><b>Não foi possível conectar</b>Verifique se a URL do App da Web (API_URL) foi configurada no topo do script.</div>`;
+  }
+}
+
+resetForm();
+loadAll();
+window.openApprove = openApprove;
+window.openDelete = openDelete;
+window.exportPdf = exportPdf;
+</script>
+</body>
+</html>
