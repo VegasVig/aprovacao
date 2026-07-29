@@ -240,10 +240,10 @@
       <h2 style="margin-top:0;font-size:18px;">Solicitação de Aprovação de Manutenção</h2>
       <form id="reqForm">
         <div class="field-row">
-          <div class="field"><label>Data</label><input type="date" id="fData" required></div>
-          <div class="field"><label>Solicitante</label><input type="text" id="fSolicitante" placeholder="Nome(s)" required></div>
-          <div class="field"><label>Setor</label><input type="text" id="fSetor" placeholder="Ex: Frota de Veículos" required></div>
-          <div class="field"><label>Veículo / Placa</label><input type="text" id="fVeiculo" placeholder="Ex: Palio Faire - FOT6A75" required></div>
+          <div class="field"><label>Data</label><input type="date" id="fData"></div>
+          <div class="field"><label>Solicitante</label><input type="text" id="fSolicitante" placeholder="Nome(s)"></div>
+          <div class="field"><label>Setor</label><input type="text" id="fSetor" placeholder="Ex: Frota de Veículos"></div>
+          <div class="field"><label>Veículo / Placa</label><input type="text" id="fVeiculo" placeholder="Ex: Palio Faire - FOT6A75"></div>
         </div>
 
         <div class="subhead">Descrição do Problema</div>
@@ -346,7 +346,10 @@
 <div class="toast-wrap" id="toastWrap"></div>
 
 <script>
-
+/* ======================================================================
+   CONFIGURAÇÃO
+   Cole aqui a URL do App da Web publicado a partir do Code.gs
+   ====================================================================== */
 const API_URL = "https://script.google.com/macros/s/AKfycbw9jnHhFUOXxVeXc53X-ObZOagyWYIAO7C-ieiWeMNnNAL46wvF6xHLUVBWtMbfmtE3/exec";
 
 /* ---------------- estado ---------------- */
