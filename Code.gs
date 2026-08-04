@@ -102,6 +102,7 @@ function doPost(e) {
     var action = data.action;
     switch (action) {
       case 'create': return respond_(criarSolicitacao_(data));
+      case 'update': return respond_(editarSolicitacao_(data));
       case 'checkPassword': return respond_(checarSenha_(data));
       case 'approve': return respond_(aprovarSolicitacao_(data));
       case 'delete': return respond_(excluirSolicitacao_(data));
@@ -189,6 +190,35 @@ function criarSolicitacao_(data) {
   return { ok: true, id: id, numero: numero };
 }
 
+// Permite que o próprio solicitante edite a solicitação enquanto ela ainda
+// não tiver sido aprovada. Depois de aprovada, os dados ficam travados (o
+// registro passa a ser um documento assinado pela diretoria).
+function editarSolicitacao_(data) {
+  var sh = sheet_();
+  var row = findRow_(sh, data.id);
+  if (row === -1) return { ok: false, error: 'Solicitação não encontrada.' };
+
+  var status = sh.getRange(row, 12).getValue(); // coluna 'status'
+  if (status !== 'Pendente') {
+    return { ok: false, error: 'Esta solicitação já foi aprovada e não pode mais ser editada.' };
+  }
+
+  sh.getRange(row, 4, 1, 1).setNumberFormat('@'); // coluna 'data' como texto
+  sh.getRange(row, 4, 1, 4).setValues([[
+    data.data || '',
+    data.solicitante || '',
+    data.setor || '',
+    data.veiculo || ''
+  ]]);
+  sh.getRange(row, 8, 1, 3).setValues([[
+    JSON.stringify(data.descricao || []),
+    JSON.stringify(data.pecas || []),
+    JSON.stringify(data.maoObra || [])
+  ]]);
+  sh.getRange(row, 11).setValue(data.obs || '');
+  return { ok: true };
+}
+
 function checarSenha_(data) {
   var senha = PropertiesService.getScriptProperties().getProperty('DASHBOARD_PASSWORD');
   return { ok: data.senha === senha };
@@ -203,9 +233,6 @@ function findRow_(sh, id) {
 }
 
 function aprovarSolicitacao_(data) {
-  var senha = PropertiesService.getScriptProperties().getProperty('DASHBOARD_PASSWORD');
-  if (data.senha !== senha) return { ok: false, error: 'Senha incorreta.' };
-
   var sh = sheet_();
   var row = findRow_(sh, data.id);
   if (row === -1) return { ok: false, error: 'Solicitação não encontrada.' };
@@ -222,12 +249,17 @@ function aprovarSolicitacao_(data) {
 }
 
 function excluirSolicitacao_(data) {
-  var senha = PropertiesService.getScriptProperties().getProperty('DASHBOARD_PASSWORD');
-  if (data.senha !== senha) return { ok: false, error: 'Senha incorreta.' };
-
   var sh = sheet_();
   var row = findRow_(sh, data.id);
   if (row === -1) return { ok: false, error: 'Solicitação não encontrada.' };
+
+  var status = sh.getRange(row, 12).getValue(); // coluna 'status'
+  if (status === 'Aprovado') {
+    // Só exige a senha da diretoria quando a solicitação já foi assinada/aprovada.
+    var senha = PropertiesService.getScriptProperties().getProperty('DASHBOARD_PASSWORD');
+    if (data.senha !== senha) return { ok: false, error: 'Senha incorreta.' };
+  }
+
   sh.deleteRow(row);
   return { ok: true };
 }

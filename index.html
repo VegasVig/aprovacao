@@ -154,6 +154,11 @@
   .price-val.ok{background:var(--ok-bg);color:var(--ok);}
   .price-val.alt{background:var(--warn-bg);color:var(--warn);}
   .price-val.alto{background:var(--danger-bg);color:var(--danger);}
+  .min-badge{
+    display:inline-block;font-family:'Inter',sans-serif;font-size:9px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.05em;color:var(--ok);
+    border:1px solid var(--ok);padding:1px 5px;border-radius:2px;margin-left:6px;vertical-align:middle;
+  }
   .card-obs{font-size:12px;color:var(--muted);font-style:italic;margin-bottom:14px;}
   .card-actions{display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--line-soft);padding-top:14px;}
   .approved-tag{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:10px;}
@@ -334,7 +339,7 @@
 <div class="overlay" id="delOverlay">
   <div class="modal" style="max-width:400px;">
     <h3>Excluir registro</h3>
-    <div class="sub">Esta ação remove definitivamente a solicitação do dashboard. Use apenas quando a transação estiver concluída.</div>
+    <div class="sub">Esta ação remove definitivamente a solicitação. Essa operação não pode ser desfeita.</div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="delCancel">Cancelar</button>
       <button class="btn btn-danger" id="delConfirm">Excluir Definitivamente</button>
@@ -349,13 +354,14 @@
    CONFIGURAÇÃO
    Cole aqui a URL do App da Web publicado a partir do Code.gs
    ====================================================================== */
-const API_URL = "https://script.google.com/macros/s/AKfycbxh1O99bPCvUted_QwYM771odTrXkM8SIj894EAbeVhb_a9IX0JMXxnqsAzsUD1kk4/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwM4U8CZokvKdrlkji9NMjRsPiT1GUwIqVYl-pW5TduFvAC8ik6uZE8l9JiN3fqN55V/exec";
 
 /* ---------------- estado ---------------- */
 let pendentes = [];
 let aprovados = [];
 let approveTargetId = null;
 let deleteTargetId = null;
+let editingId = null;
 let dashUnlocked = sessionStorage.getItem('vegasDashUnlocked') === '1';
 let dashPassword = sessionStorage.getItem('vegasDashPass') || '';
 
@@ -487,15 +493,54 @@ function resetForm(){
 /* ---------------- toggle painel do formulário ---------------- */
 const toggleFormBtn = document.getElementById('toggleForm');
 const formPanel = document.getElementById('formPanel');
+const formTitleEl = document.querySelector('#formPanel h2');
+const submitBtnEl = document.querySelector('#reqForm button[type=submit]');
+
+function setFormMode(edit, numero){
+  formTitleEl.textContent = edit ? `Editar Solicitação Nº ${numero}` : 'Solicitação de Aprovação de Manutenção';
+  submitBtnEl.textContent = edit ? 'Salvar Alterações' : 'Enviar para Aprovação';
+}
+
 toggleFormBtn.onclick = () => {
   const open = formPanel.classList.toggle('open');
   toggleFormBtn.textContent = open ? '– Fechar Formulário' : '+ Nova Solicitação';
-  if(open && !document.getElementById('descList').children.length) resetForm();
+  if(open){
+    editingId = null;
+    setFormMode(false);
+    resetForm();
+  }
 };
 document.getElementById('cancelForm').onclick = () => {
   formPanel.classList.remove('open');
   toggleFormBtn.textContent = '+ Nova Solicitação';
+  editingId = null;
+  setFormMode(false);
 };
+
+function openEdit(id){
+  const r = pendentes.find(p=>p.id===id);
+  if(!r) return;
+  editingId = id;
+
+  document.getElementById('descList').innerHTML = '';
+  document.getElementById('pecasList').innerHTML = '';
+  document.getElementById('maoObraList').innerHTML = '';
+
+  document.getElementById('fData').value = String(r.data||'').split('T')[0] || new Date().toISOString().slice(0,10);
+  document.getElementById('fSolicitante').value = r.solicitante || '';
+  document.getElementById('fSetor').value = r.setor || '';
+  document.getElementById('fVeiculo').value = r.veiculo || '';
+  document.getElementById('fObs').value = r.obs || '';
+
+  (r.descricao && r.descricao.length ? r.descricao : ['']).forEach(d=>addDescRow(d));
+  (r.pecas && r.pecas.length ? r.pecas : [{}]).forEach(p=>addSupplierRow('pecasList', p));
+  (r.maoObra && r.maoObra.length ? r.maoObra : [{}]).forEach(m=>addSupplierRow('maoObraList', m));
+
+  setFormMode(true, r.numero);
+  formPanel.classList.add('open');
+  toggleFormBtn.textContent = '– Fechar Formulário';
+  formPanel.scrollIntoView({behavior:'smooth', block:'start'});
+}
 
 /* ---------------- envio do formulário ---------------- */
 document.getElementById('reqForm').onsubmit = async (e) => {
@@ -521,22 +566,27 @@ document.getElementById('reqForm').onsubmit = async (e) => {
     obs: document.getElementById('fObs').value.trim()
   };
 
+  const isEdit = !!editingId;
   const btn = e.target.querySelector('button[type=submit]');
-  btn.disabled = true; btn.textContent = 'Enviando...';
+  btn.disabled = true; btn.textContent = isEdit ? 'Salvando...' : 'Enviando...';
   try{
-    const res = await api('create', payload);
+    const res = isEdit
+      ? await api('update', {...payload, id: editingId})
+      : await api('create', payload);
     if(res.ok){
-      toast(`Solicitação Nº ${res.numero} enviada para aprovação.`);
+      toast(isEdit ? 'Solicitação atualizada com sucesso.' : `Solicitação Nº ${res.numero} enviada para aprovação.`);
       formPanel.classList.remove('open');
       toggleFormBtn.textContent = '+ Nova Solicitação';
+      editingId = null;
+      setFormMode(false);
       await loadAll();
     } else {
-      toast(res.error || 'Erro ao enviar solicitação.', true);
+      toast(res.error || (isEdit ? 'Erro ao salvar alterações.' : 'Erro ao enviar solicitação.'), true);
     }
   } catch(err){
     toast('Falha de conexão com o servidor.', true);
   } finally {
-    btn.disabled = false; btn.textContent = 'Enviar para Aprovação';
+    btn.disabled = false; btn.textContent = isEdit ? 'Salvar Alterações' : 'Enviar para Aprovação';
   }
 };
 
@@ -549,10 +599,19 @@ function chosenSupplierHtml(label, item){
   </div>`;
 }
 
+function menorValor_(items){
+  const valores = (items||[]).map(it=>parseFloat(it.valor)||0).filter(v=>v>0);
+  return valores.length ? Math.min(...valores) : null;
+}
+
 function priceRowsHtml(items){
   if(!items || !items.length) return '<div style="font-size:12px;color:var(--muted);">Nenhum fornecedor informado.</div>';
+  const minVal = menorValor_(items);
   return `<table class="price-table"><thead><tr><th>Fornecedor</th><th style="text-align:right;">Valor</th></tr></thead><tbody>
-    ${items.map(it=>`<tr><td>${escapeHtml(it.nome)}</td><td style="text-align:right;"><span class="price-val ${it.status||''}">${fmtBRL(it.valor)}</span></td></tr>`).join('')}
+    ${items.map(it=>{
+      const isMin = items.length>1 && minVal!==null && (parseFloat(it.valor)||0)===minVal;
+      return `<tr><td>${escapeHtml(it.nome)}${isMin?'<span class="min-badge">Menor valor</span>':''}</td><td style="text-align:right;"><span class="price-val ${it.status||''}">${fmtBRL(it.valor)}</span></td></tr>`;
+    }).join('')}
   </tbody></table>`;
 }
 
@@ -583,6 +642,8 @@ function renderPend(){
       ${priceRowsHtml(r.maoObra)}
       ${r.obs ? `<div class="card-obs">Obs: ${escapeHtml(r.obs)}</div>` : ''}
       <div class="card-actions">
+        <button class="btn btn-ghost btn-sm" onclick="openEdit('${r.id}')">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="openDelete('${r.id}')">Excluir</button>
         <button class="btn btn-primary btn-sm" onclick="openApprove('${r.id}')">Aprovar Orçamento</button>
       </div>
     </div>
@@ -685,13 +746,16 @@ document.getElementById('clearSig').onclick = () => {
 
 function supplierChoiceHtml(items, groupName){
   if(!items || !items.length) return '<div style="font-size:12px;color:var(--muted);">Nenhum fornecedor informado.</div>';
-  return items.map((it,idx)=>`
+  const minVal = menorValor_(items);
+  return items.map((it,idx)=>{
+    const isMin = items.length>1 && minVal!==null && (parseFloat(it.valor)||0)===minVal;
+    return `
     <label class="choice-row">
       <input type="radio" name="${groupName}" value="${idx}" ${items.length===1?'checked':''}>
-      <span class="choice-nome">${escapeHtml(it.nome)}</span>
+      <span class="choice-nome">${escapeHtml(it.nome)}${isMin?'<span class="min-badge">Menor valor</span>':''}</span>
       <span class="price-val ${it.status||''}">${fmtBRL(it.valor)}</span>
     </label>
-  `).join('');
+  `;}).join('');
 }
 
 function openApprove(id){
@@ -839,6 +903,7 @@ async function loadAll(){
 resetForm();
 loadAll();
 window.openApprove = openApprove;
+window.openEdit = openEdit;
 window.openDelete = openDelete;
 window.exportPdf = exportPdf;
 </script>
