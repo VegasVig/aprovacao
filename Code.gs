@@ -22,8 +22,16 @@ var HEADERS = [
   'id', 'numero', 'timestamp', 'data', 'solicitante', 'setor', 'veiculo',
   'descricaoJSON', 'pecasJSON', 'maoObraJSON', 'obs',
   'status', 'diretor', 'dataAprovacao', 'assinatura',
-  'pecaEscolhidaJSON', 'maoObraEscolhidaJSON'
+  'pecaEscolhidaJSON', 'maoObraEscolhidaJSON', 'tratativasJSON'
 ];
+
+// Estados possíveis:
+//   'Pendente'  -> bola com a diretoria (aguardando análise/assinatura)
+//   'Em Ajuste' -> diretoria devolveu com apontamento, bola com o solicitante
+//   'Aprovado'  -> assinado; vai para o dashboard e fica travado
+var ST_PENDENTE = 'Pendente';
+var ST_AJUSTE = 'Em Ajuste';
+var ST_APROVADO = 'Aprovado';
 
 // ---------- SETUP ----------
 
@@ -105,6 +113,8 @@ function doPost(e) {
       case 'update': return respond_(editarSolicitacao_(data));
       case 'checkPassword': return respond_(checarSenha_(data));
       case 'approve': return respond_(aprovarSolicitacao_(data));
+      case 'devolver': return respond_(devolverSolicitacao_(data));
+      case 'responder': return respond_(responderSolicitacao_(data));
       case 'delete': return respond_(excluirSolicitacao_(data));
       default: return respond_({ ok: false, error: 'Ação POST desconhecida.' });
     }
@@ -145,7 +155,20 @@ function rowToObj_(row, headers) {
     try { obj[outKey] = obj[key] ? JSON.parse(obj[key]) : null; }
     catch (e) { obj[outKey] = null; }
   });
+  try { obj.tratativas = obj.tratativasJSON ? JSON.parse(obj.tratativasJSON) : []; }
+  catch (e) { obj.tratativas = []; }
   return obj;
+}
+
+function withLock_(fn) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try { return fn(); } finally { lock.releaseLock(); }
+}
+
+function lerTratativas_(sh, row) {
+  var raw = sh.getRange(row, 18).getValue();
+  try { return raw ? JSON.parse(raw) : []; } catch (e) { return []; }
 }
 
 function listSolicitacoes_() {
@@ -180,12 +203,13 @@ function criarSolicitacao_(data) {
     JSON.stringify(data.pecas || []),
     JSON.stringify(data.maoObra || []),
     data.obs || '',
-    'Pendente',
+    ST_PENDENTE,
     '',
     '',
     '',
     '',
-    ''
+    '',
+    '[]'
   ]]);
   return { ok: true, id: id, numero: numero };
 }
@@ -199,7 +223,7 @@ function editarSolicitacao_(data) {
   if (row === -1) return { ok: false, error: 'Solicitação não encontrada.' };
 
   var status = sh.getRange(row, 12).getValue(); // coluna 'status'
-  if (status !== 'Pendente') {
+  if (status === ST_APROVADO) {
     return { ok: false, error: 'Esta solicitação já foi aprovada e não pode mais ser editada.' };
   }
 
@@ -233,19 +257,148 @@ function findRow_(sh, id) {
 }
 
 function aprovarSolicitacao_(data) {
-  var sh = sheet_();
-  var row = findRow_(sh, data.id);
-  if (row === -1) return { ok: false, error: 'Solicitação não encontrada.' };
+  return withLock_(function () {
+    var sh = sheet_();
+    var row = findRow_(sh, data.id);
+    if (row === -1) return { ok: false, error: 'Solicitação não encontrada.' };
+    if (sh.getRange(row, 12).getValue() === ST_APROVADO) {
+      return { ok: false, error: 'Esta solicitação já foi aprovada e assinada.' };
+    }
 
-  var now = new Date();
-  sh.getRange(row, 14).setNumberFormat('@'); // trava dataAprovacao como texto
-  sh.getRange(row, 12).setValue('Aprovado');       // status
-  sh.getRange(row, 13).setValue(data.diretor || ''); // diretor
-  sh.getRange(row, 14).setValue(now.toISOString());  // dataAprovacao
-  sh.getRange(row, 15).setValue(data.assinatura || ''); // assinatura (dataURL base64)
-  sh.getRange(row, 16).setValue(JSON.stringify(data.pecaEscolhida || null));    // fornecedor de peça escolhido
-  sh.getRange(row, 17).setValue(JSON.stringify(data.maoObraEscolhida || null)); // fornecedor de mão de obra escolhido
-  return { ok: true };
+    var now = new Date();
+    var trilha = lerTratativas_(sh, row);
+    trilha.push({
+      autor: 'diretor',
+      tipo: 'aprovacao',
+      nome: data.diretor || '',
+      texto: data.textoAprovacao || 'De acordo. Orçamento aprovado e assinado.',
+      timestamp: now.toISOString()
+    });
+
+    sh.getRange(row, 14).setNumberFormat('@'); // trava dataAprovacao como texto
+    sh.getRange(row, 12).setValue(ST_APROVADO);        // status
+    sh.getRange(row, 13).setValue(data.diretor || ''); // diretor
+    sh.getRange(row, 14).setValue(now.toISOString());  // dataAprovacao
+    sh.getRange(row, 15).setValue(data.assinatura || ''); // assinatura (dataURL base64)
+    sh.getRange(row, 16).setValue(JSON.stringify(data.pecaEscolhida || null));
+    sh.getRange(row, 17).setValue(JSON.stringify(data.maoObraEscolhida || null));
+    sh.getRange(row, 18).setValue(JSON.stringify(trilha));
+    return { ok: true };
+  });
+}
+
+// Diretoria em desacordo: registra o apontamento e devolve a bola ao solicitante.
+function devolverSolicitacao_(data) {
+  var texto = String(data.texto || '').trim();
+  if (!texto) return { ok: false, error: 'Descreva o motivo do desacordo.' };
+  if (!String(data.diretor || '').trim()) return { ok: false, error: 'Informe o nome do diretor(a).' };
+
+  return withLock_(function () {
+    var sh = sheet_();
+    var row = findRow_(sh, data.id);
+    if (row === -1) return { ok: false, error: 'Solicitação não encontrada.' };
+    if (sh.getRange(row, 12).getValue() === ST_APROVADO) {
+      return { ok: false, error: 'Solicitação já aprovada — não pode mais ser devolvida.' };
+    }
+
+    var trilha = lerTratativas_(sh, row);
+    trilha.push({
+      autor: 'diretor',
+      tipo: 'apontamento',
+      nome: data.diretor,
+      texto: texto,
+      timestamp: new Date().toISOString()
+    });
+
+    sh.getRange(row, 12).setValue(ST_AJUSTE);
+    sh.getRange(row, 13).setValue(data.diretor);
+    sh.getRange(row, 18).setValue(JSON.stringify(trilha));
+    notificar_(rowToObj_(sh.getRange(row, 1, 1, HEADERS.length).getValues()[0], HEADERS), 'apontamento');
+    return { ok: true, rodada: trilha.length };
+  });
+}
+
+// Solicitante responde ao apontamento e devolve a bola à diretoria.
+// Pode anexar novos orçamentos na mesma ação (caso clássico: "traga outra cotação").
+function responderSolicitacao_(data) {
+  var texto = String(data.texto || '').trim();
+  if (!texto) return { ok: false, error: 'Escreva a resposta à diretoria.' };
+
+  return withLock_(function () {
+    var sh = sheet_();
+    var row = findRow_(sh, data.id);
+    if (row === -1) return { ok: false, error: 'Solicitação não encontrada.' };
+    var status = sh.getRange(row, 12).getValue();
+    if (status === ST_APROVADO) return { ok: false, error: 'Solicitação já aprovada.' };
+    if (status !== ST_AJUSTE) return { ok: false, error: 'Esta solicitação já está com a diretoria.' };
+
+    var novos = Array.isArray(data.novos) ? data.novos : [];
+    var anexados = [];
+    if (novos.length) {
+      var pecas = parseArr_(sh.getRange(row, 9).getValue());
+      var mo = parseArr_(sh.getRange(row, 10).getValue());
+      novos.forEach(function (n) {
+        if (!n || !String(n.nome || '').trim()) return;
+        var item = { nome: String(n.nome).trim(), valor: n.valor || 0, status: n.status || 'ok' };
+        if (n.tipo === 'maoObra') mo.push(item); else pecas.push(item);
+        anexados.push((n.tipo === 'maoObra' ? 'Mão de obra' : 'Peça') + ': ' + item.nome + ' — R$ ' + item.valor);
+      });
+      sh.getRange(row, 9).setValue(JSON.stringify(pecas));
+      sh.getRange(row, 10).setValue(JSON.stringify(mo));
+    }
+
+    var trilha = lerTratativas_(sh, row);
+    trilha.push({
+      autor: 'solicitante',
+      tipo: 'resposta',
+      nome: String(data.solicitante || sh.getRange(row, 5).getValue() || ''),
+      texto: texto,
+      anexos: anexados,
+      timestamp: new Date().toISOString()
+    });
+
+    sh.getRange(row, 12).setValue(ST_PENDENTE);
+    sh.getRange(row, 18).setValue(JSON.stringify(trilha));
+    notificar_(rowToObj_(sh.getRange(row, 1, 1, HEADERS.length).getValues()[0], HEADERS), 'resposta');
+    return { ok: true, rodada: trilha.length };
+  });
+}
+
+function parseArr_(raw) {
+  try { var a = raw ? JSON.parse(raw) : []; return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
+}
+
+// ---------- NOTIFICAÇÃO (opcional) ----------
+// Preencha as propriedades do script EMAIL_DIRETORIA e/ou EMAIL_SOLICITANTES
+// (Configurações do projeto > Propriedades do script) para ativar o aviso por
+// e-mail. Sem isso o ciclo depende de alguém abrir a página — ver README.
+function notificar_(reg, evento) {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var para = evento === 'apontamento'
+      ? props.getProperty('EMAIL_SOLICITANTES')
+      : props.getProperty('EMAIL_DIRETORIA');
+    if (!para) return;
+    var url = props.getProperty('APP_URL') || '';
+    var assunto = evento === 'apontamento'
+      ? '[Vegas] Solicitação Nº ' + reg.numero + ' devolvida para ajuste'
+      : '[Vegas] Solicitação Nº ' + reg.numero + ' respondida — aguarda diretoria';
+    var ultima = (reg.tratativas || [])[(reg.tratativas || []).length - 1] || {};
+    MailApp.sendEmail({
+      to: para,
+      subject: assunto,
+      body: [
+        'Solicitação Nº ' + reg.numero + ' — ' + reg.veiculo,
+        'Solicitante: ' + reg.solicitante + ' | Setor: ' + reg.setor,
+        '',
+        (ultima.nome || '') + ' escreveu:',
+        ultima.texto || '',
+        '',
+        url
+      ].join('\n')
+    });
+  } catch (e) { /* nunca deixa a notificação derrubar a gravação */ }
 }
 
 function excluirSolicitacao_(data) {
@@ -254,7 +407,7 @@ function excluirSolicitacao_(data) {
   if (row === -1) return { ok: false, error: 'Solicitação não encontrada.' };
 
   var status = sh.getRange(row, 12).getValue(); // coluna 'status'
-  if (status === 'Aprovado') {
+  if (status === ST_APROVADO) {
     // Só exige a senha da diretoria quando a solicitação já foi assinada/aprovada.
     var senha = PropertiesService.getScriptProperties().getProperty('DASHBOARD_PASSWORD');
     if (data.senha !== senha) return { ok: false, error: 'Senha incorreta.' };

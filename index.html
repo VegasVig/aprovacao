@@ -164,6 +164,52 @@
   .approved-tag{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:10px;}
   .approved-tag .name{color:var(--silver-bright);font-weight:600;}
   .sig-thumb{height:34px;border-bottom:1px solid var(--line);}
+  /* ---------- status / tratativas ---------- */
+  .st-badge{
+    display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.07em;padding:4px 9px;border:1px solid;white-space:nowrap;
+  }
+  .st-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;flex:none;}
+  .st-badge.diretoria{color:var(--warn);border-color:rgba(224,178,60,.45);background:var(--warn-bg);}
+  .st-badge.solicitante{color:var(--live);border-color:rgba(90,169,230,.45);background:rgba(90,169,230,.10);}
+  .round-tag{font-size:10px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;}
+
+  .thread{border-top:1px solid var(--line-soft);margin:14px 0 4px;padding-top:12px;}
+  .thread-head{
+    display:flex;justify-content:space-between;align-items:center;cursor:pointer;
+    font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+  }
+  .thread-head:hover{color:var(--silver-bright);}
+  .thread-body{display:none;margin-top:12px;}
+  .thread.open .thread-body{display:block;}
+  .thread-head .caret{transition:transform .18s;}
+  .thread.open .thread-head .caret{transform:rotate(90deg);}
+  .msg{border-left:2px solid var(--line);padding:2px 0 12px 12px;position:relative;}
+  .msg:last-child{padding-bottom:0;}
+  .msg.diretor{border-left-color:var(--warn);}
+  .msg.solicitante{border-left-color:var(--live);}
+  .msg.aprovacao{border-left-color:var(--ok);}
+  .msg-top{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px;}
+  .msg-autor{font-size:12px;font-weight:700;color:var(--silver-bright);}
+  .msg-role{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);border:1px solid var(--line);padding:1px 5px;}
+  .msg-time{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-left:auto;}
+  .msg-texto{font-size:13px;color:var(--silver);white-space:pre-wrap;line-height:1.5;}
+  .msg-anexos{margin-top:6px;font-size:11px;color:var(--ok);}
+  .last-msg{
+    background:var(--bg-alt);border:1px solid var(--line);border-left:3px solid var(--warn);
+    padding:10px 12px;margin:12px 0;font-size:13px;
+  }
+  .last-msg.solicitante{border-left-color:var(--live);}
+  .last-msg .lbl{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px;}
+  .last-msg .txt{color:var(--silver-bright);white-space:pre-wrap;}
+
+  .filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+  .filter-bar button{
+    background:transparent;border:1px solid var(--line);color:var(--muted);
+    padding:6px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+  }
+  .filter-bar button.active{border-color:var(--live);color:var(--silver-bright);background:rgba(90,169,230,.08);}
+
   .empty{text-align:center;padding:50px 20px;color:var(--muted);font-size:13px;}
   .empty b{display:block;color:var(--silver);font-size:15px;margin-bottom:6px;font-family:'Rajdhani',sans-serif;}
 
@@ -274,8 +320,13 @@
     </div>
 
     <div class="section-head">
-      <h2>Aguardando Assinatura</h2>
+      <h2>Em Tratativa</h2>
       <span class="count mono" id="pendCount">0 solicitações</span>
+    </div>
+    <div class="filter-bar">
+      <button data-f="todas" class="active">Todas</button>
+      <button data-f="diretoria">Aguardando diretoria <span class="mono" id="cntDir">0</span></button>
+      <button data-f="solicitante">Aguardando solicitante <span class="mono" id="cntSol">0</span></button>
     </div>
     <div class="card-grid" id="pendList"></div>
   </section>
@@ -335,6 +386,51 @@
   </div>
 </div>
 
+<!-- ===================== MODAL: DEVOLVER (DIRETORIA) ===================== -->
+<div class="overlay" id="devOverlay">
+  <div class="modal" style="max-width:560px;">
+    <h3>Registrar Desacordo</h3>
+    <div class="sub" id="devSub"></div>
+    <div id="devThread"></div>
+    <div class="field-row two">
+      <div class="field"><label>Diretor(a) responsável</label><input type="text" id="devDiretor" placeholder="Nome"></div>
+    </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Apontamento para o solicitante</label>
+      <textarea id="devTexto" style="min-height:110px;" placeholder="Ex: Valor da mão de obra acima do praticado. Traga uma terceira cotação e justifique a escolha da peça mais caro."></textarea>
+    </div>
+    <div class="err-msg" id="devErr"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="devCancel">Cancelar</button>
+      <button class="btn btn-primary" id="devConfirm">Devolver ao Solicitante</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: RESPONDER (SOLICITANTE) ===================== -->
+<div class="overlay" id="respOverlay">
+  <div class="modal" style="max-width:560px;">
+    <h3>Responder à Diretoria</h3>
+    <div class="sub" id="respSub"></div>
+    <div id="respThread"></div>
+    <div class="field-row two">
+      <div class="field"><label>Quem está respondendo</label><input type="text" id="respNome" placeholder="Nome"></div>
+    </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Resposta</label>
+      <textarea id="respTexto" style="min-height:110px;" placeholder="Ex: Cotei mais dois fornecedores. A peça mais barata é remanufaturada e não tem garantia — segue nova cotação."></textarea>
+    </div>
+    <div class="subhead" style="margin-top:18px;">Anexar novo orçamento (opcional)</div>
+    <div id="respNovosList"></div>
+    <button type="button" class="add-link" id="respAddNovo">+ adicionar cotação</button>
+    <div class="err-msg" id="respErr"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="respCancel">Cancelar</button>
+      <button class="btn btn-primary" id="respConfirm">Enviar para a Diretoria</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===================== MODAL: CONFIRMAR EXCLUSÃO ===================== -->
 <div class="overlay" id="delOverlay">
   <div class="modal" style="max-width:400px;">
@@ -354,7 +450,7 @@
    CONFIGURAÇÃO
    Cole aqui a URL do App da Web publicado a partir do Code.gs
    ====================================================================== */
-const API_URL = "https://script.google.com/macros/s/AKfycbwM4U8CZokvKdrlkji9NMjRsPiT1GUwIqVYl-pW5TduFvAC8ik6uZE8l9JiN3fqN55V/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwzWqDarWA2yYmD9N_iEHndGahmVXNdrI7J2xAODSquBqLRtP4q4gKccbcSAzkrcUHE/exec";
 
 /* ---------------- estado ---------------- */
 let pendentes = [];
@@ -362,6 +458,9 @@ let aprovados = [];
 let approveTargetId = null;
 let deleteTargetId = null;
 let editingId = null;
+let devTargetId = null;
+let respTargetId = null;
+let pendFilter = 'todas';
 let dashUnlocked = sessionStorage.getItem('vegasDashUnlocked') === '1';
 let dashPassword = sessionStorage.getItem('vegasDashPass') || '';
 
@@ -615,20 +714,92 @@ function priceRowsHtml(items){
   </tbody></table>`;
 }
 
+function fmtDateTime(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? String(iso) : d.toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+function statusBadgeHtml(r){
+  const emAjuste = r.status === 'Em Ajuste';
+  return `<span class="st-badge ${emAjuste?'solicitante':'diretoria'}">${emAjuste?'Aguardando solicitante':'Aguardando diretoria'}</span>`;
+}
+
+function msgHtml(m){
+  const role = m.autor === 'diretor' ? 'Diretoria' : 'Solicitante';
+  const cls = m.tipo === 'aprovacao' ? 'aprovacao' : m.autor;
+  return `<div class="msg ${cls}">
+    <div class="msg-top">
+      <span class="msg-autor">${escapeHtml(m.nome||'—')}</span>
+      <span class="msg-role">${role}</span>
+      <span class="msg-time">${fmtDateTime(m.timestamp)}</span>
+    </div>
+    <div class="msg-texto">${escapeHtml(m.texto||'')}</div>
+    ${(m.anexos&&m.anexos.length)?`<div class="msg-anexos">+ ${m.anexos.map(escapeHtml).join('<br>+ ')}</div>`:''}
+  </div>`;
+}
+
+// Trilha completa, recolhida por padrão. Mantém o card curto sem esconder o histórico.
+function threadHtml(r, forcarAberto){
+  const t = r.tratativas || [];
+  if(!t.length) return '';
+  return `<div class="thread ${forcarAberto?'open':''}">
+    <div class="thread-head" onclick="this.parentNode.classList.toggle('open')">
+      <span><span class="caret">▸</span> Histórico de tratativas · ${t.length} registro${t.length===1?'':'s'}</span>
+      <span class="round-tag">Rodada ${Math.ceil(t.length/2)}</span>
+    </div>
+    <div class="thread-body">${t.map(msgHtml).join('')}</div>
+  </div>`;
+}
+
+// Último recado em destaque — é o que a pessoa precisa ler antes de agir.
+function lastMsgHtml(r){
+  const t = r.tratativas || [];
+  if(!t.length) return '';
+  const m = t[t.length-1];
+  const lbl = m.autor === 'diretor' ? `Apontamento da diretoria · ${escapeHtml(m.nome||'')}` : `Resposta do solicitante · ${escapeHtml(m.nome||'')}`;
+  return `<div class="last-msg ${m.autor}">
+    <span class="lbl">${lbl} · ${fmtDateTime(m.timestamp)}</span>
+    <span class="txt">${escapeHtml(m.texto||'')}</span>
+  </div>`;
+}
+
+function pendFiltradas(){
+  if(pendFilter === 'diretoria') return pendentes.filter(r=>r.status !== 'Em Ajuste');
+  if(pendFilter === 'solicitante') return pendentes.filter(r=>r.status === 'Em Ajuste');
+  return pendentes;
+}
+
 function renderPend(){
   const wrap = document.getElementById('pendList');
-  document.getElementById('pendCount').textContent = `${pendentes.length} solicitaç${pendentes.length===1?'ão':'ões'}`;
-  if(!pendentes.length){
-    wrap.innerHTML = `<div class="empty"><b>Nada pendente</b>Todas as solicitações já foram assinadas e aprovadas.</div>`;
+  const lista = pendFiltradas();
+  document.getElementById('pendCount').textContent = `${lista.length} solicitaç${lista.length===1?'ão':'ões'}`;
+  document.getElementById('cntDir').textContent = pendentes.filter(r=>r.status !== 'Em Ajuste').length;
+  document.getElementById('cntSol').textContent = pendentes.filter(r=>r.status === 'Em Ajuste').length;
+
+  if(!lista.length){
+    wrap.innerHTML = `<div class="empty"><b>Nada nesta fila</b>Nenhuma solicitação no filtro selecionado.</div>`;
     return;
   }
-  wrap.innerHTML = pendentes.map(r => `
+  wrap.innerHTML = lista.map(r => {
+    const emAjuste = r.status === 'Em Ajuste';
+    const acoes = emAjuste
+      ? `<button class="btn btn-ghost btn-sm" onclick="openEdit('${r.id}')">Editar</button>
+         <button class="btn btn-danger btn-sm" onclick="openDelete('${r.id}')">Excluir</button>
+         <button class="btn btn-ghost btn-sm" onclick="openApprove('${r.id}')">Aprovar mesmo assim</button>
+         <button class="btn btn-primary btn-sm" onclick="openResponder('${r.id}')">Responder à Diretoria</button>`
+      : `<button class="btn btn-ghost btn-sm" onclick="openEdit('${r.id}')">Editar</button>
+         <button class="btn btn-danger btn-sm" onclick="openDelete('${r.id}')">Excluir</button>
+         <button class="btn btn-ghost btn-sm" onclick="openDevolver('${r.id}')">Em Desacordo</button>
+         <button class="btn btn-primary btn-sm" onclick="openApprove('${r.id}')">Aprovar e Assinar</button>`;
+    return `
     <div class="card">
       <div class="card-top">
         <div>
           <div class="numero mono">SOLICITAÇÃO Nº ${r.numero}</div>
           <div class="veiculo">${escapeHtml(r.veiculo)}</div>
         </div>
+        ${statusBadgeHtml(r)}
       </div>
       <div class="card-meta">
         <span><b>Data:</b> ${fmtDate(r.data)}</span>
@@ -641,14 +812,21 @@ function renderPend(){
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:10px 0 4px;">Fornecedor Mão de Obra</div>
       ${priceRowsHtml(r.maoObra)}
       ${r.obs ? `<div class="card-obs">Obs: ${escapeHtml(r.obs)}</div>` : ''}
-      <div class="card-actions">
-        <button class="btn btn-ghost btn-sm" onclick="openEdit('${r.id}')">Editar</button>
-        <button class="btn btn-danger btn-sm" onclick="openDelete('${r.id}')">Excluir</button>
-        <button class="btn btn-primary btn-sm" onclick="openApprove('${r.id}')">Aprovar Orçamento</button>
-      </div>
-    </div>
-  `).join('');
+      ${lastMsgHtml(r)}
+      ${threadHtml(r)}
+      <div class="card-actions">${acoes}</div>
+    </div>`;
+  }).join('');
 }
+
+document.querySelectorAll('.filter-bar button').forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll('.filter-bar button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    pendFilter = b.dataset.f;
+    renderPend();
+  };
+});
 
 /* ---------------- dashboard ---------------- */
 function renderLock(){
@@ -707,6 +885,7 @@ function renderDash(){
         <span>Aprovado por <span class="name">${escapeHtml(r.diretor||'')}</span> em ${r.dataAprovacao ? new Date(r.dataAprovacao).toLocaleString('pt-BR') : ''}</span>
       </div>
       ${r.assinatura ? `<img class="sig-thumb" src="${r.assinatura}" alt="assinatura">` : ''}
+      ${threadHtml(r)}
       <div class="card-actions">
         <button class="btn btn-ghost btn-sm" onclick="exportPdf('${r.id}')">Exportar PDF</button>
         <button class="btn btn-danger btn-sm" onclick="openDelete('${r.id}')">Excluir</button>
@@ -802,6 +981,115 @@ document.getElementById('apConfirm').onclick = async () => {
   }
 };
 
+/* ---------------- ciclo de tratativa: devolver / responder ---------------- */
+const devOverlay = document.getElementById('devOverlay');
+const respOverlay = document.getElementById('respOverlay');
+
+function openDevolver(id){
+  const r = pendentes.find(p=>p.id===id);
+  if(!r) return;
+  devTargetId = id;
+  document.getElementById('devSub').textContent = `Solicitação Nº ${r.numero} · ${r.veiculo}`;
+  document.getElementById('devThread').innerHTML = threadHtml(r, true);
+  document.getElementById('devDiretor').value = r.diretor || '';
+  document.getElementById('devTexto').value = '';
+  document.getElementById('devErr').textContent = '';
+  devOverlay.classList.add('open');
+}
+document.getElementById('devCancel').onclick = ()=> devOverlay.classList.remove('open');
+
+document.getElementById('devConfirm').onclick = async ()=>{
+  const errEl = document.getElementById('devErr');
+  const diretor = document.getElementById('devDiretor').value.trim();
+  const texto = document.getElementById('devTexto').value.trim();
+  if(!diretor){ errEl.textContent = 'Informe o nome do diretor(a).'; return; }
+  if(texto.length < 10){ errEl.textContent = 'Descreva o apontamento com pelo menos 10 caracteres.'; return; }
+  const btn = document.getElementById('devConfirm');
+  btn.disabled = true; errEl.textContent = 'Enviando...';
+  try{
+    const res = await api('devolver', {id: devTargetId, diretor, texto});
+    if(res.ok){
+      devOverlay.classList.remove('open');
+      toast('Apontamento registrado. Solicitação devolvida ao solicitante.');
+      await loadAll();
+    } else { errEl.textContent = res.error || 'Erro ao devolver.'; }
+  } catch(e){ errEl.textContent = 'Falha de conexão.'; }
+  finally { btn.disabled = false; }
+};
+
+function addNovoOrcRow(){
+  const wrap = document.createElement('div');
+  wrap.className = 'dyn-row';
+  wrap.innerHTML = `
+    <div class="field" style="max-width:120px;">
+      <label>Tipo</label>
+      <select class="n-tipo"><option value="peca">Peça</option><option value="maoObra">Mão de obra</option></select>
+    </div>
+    <div class="field"><label>Fornecedor</label><input type="text" class="n-nome" placeholder="Nome"></div>
+    <div class="field" style="max-width:120px;"><label>Valor (R$)</label><input type="number" step="0.01" min="0" class="n-valor"></div>
+    <div class="field" style="max-width:110px;">
+      <label>Status</label>
+      <div class="status-picker">
+        <button type="button" class="dot-btn sel" data-c="ok"></button>
+        <button type="button" class="dot-btn" data-c="alt"></button>
+        <button type="button" class="dot-btn" data-c="alto"></button>
+      </div>
+    </div>
+    <button type="button" class="remove-row" title="remover">×</button>`;
+  wrap.dataset.status = 'ok';
+  wrap.querySelectorAll('.dot-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      wrap.querySelectorAll('.dot-btn').forEach(b=>b.classList.remove('sel'));
+      btn.classList.add('sel');
+      wrap.dataset.status = btn.dataset.c;
+    };
+  });
+  wrap.querySelector('.remove-row').onclick = ()=> wrap.remove();
+  document.getElementById('respNovosList').appendChild(wrap);
+}
+document.getElementById('respAddNovo').onclick = addNovoOrcRow;
+
+function openResponder(id){
+  const r = pendentes.find(p=>p.id===id);
+  if(!r) return;
+  respTargetId = id;
+  document.getElementById('respSub').textContent = `Solicitação Nº ${r.numero} · ${r.veiculo}`;
+  document.getElementById('respThread').innerHTML = threadHtml(r, true);
+  document.getElementById('respNome').value = r.solicitante || '';
+  document.getElementById('respTexto').value = '';
+  document.getElementById('respNovosList').innerHTML = '';
+  document.getElementById('respErr').textContent = '';
+  respOverlay.classList.add('open');
+}
+document.getElementById('respCancel').onclick = ()=> respOverlay.classList.remove('open');
+
+document.getElementById('respConfirm').onclick = async ()=>{
+  const errEl = document.getElementById('respErr');
+  const nome = document.getElementById('respNome').value.trim();
+  const texto = document.getElementById('respTexto').value.trim();
+  if(!nome){ errEl.textContent = 'Informe quem está respondendo.'; return; }
+  if(texto.length < 10){ errEl.textContent = 'Escreva a resposta com pelo menos 10 caracteres.'; return; }
+
+  const novos = [...document.querySelectorAll('#respNovosList .dyn-row')].map(row=>({
+    tipo: row.querySelector('.n-tipo').value,
+    nome: row.querySelector('.n-nome').value.trim(),
+    valor: row.querySelector('.n-valor').value || 0,
+    status: row.dataset.status
+  })).filter(n=>n.nome);
+
+  const btn = document.getElementById('respConfirm');
+  btn.disabled = true; errEl.textContent = 'Enviando...';
+  try{
+    const res = await api('responder', {id: respTargetId, solicitante: nome, texto, novos});
+    if(res.ok){
+      respOverlay.classList.remove('open');
+      toast('Resposta enviada. Solicitação voltou para a diretoria.');
+      await loadAll();
+    } else { errEl.textContent = res.error || 'Erro ao responder.'; }
+  } catch(e){ errEl.textContent = 'Falha de conexão.'; }
+  finally { btn.disabled = false; }
+};
+
 /* ---------------- excluir ---------------- */
 const delOverlay = document.getElementById('delOverlay');
 function openDelete(id){ deleteTargetId = id; delOverlay.classList.add('open'); }
@@ -874,7 +1162,34 @@ function exportPdf(id){
     doc.text(split, marginX, y); y += split.length*13;
   }
 
+  // Histórico de tratativas — é o que sustenta a assinatura em caso de auditoria.
+  const pageH = doc.internal.pageSize.getHeight();
+  const brk = (need) => { if(y + need > pageH - 60){ doc.addPage(); y = 56; } };
+  const trilha = r.tratativas || [];
+  if(trilha.length){
+    brk(50);
+    y += 10; doc.setLineWidth(.5); doc.line(marginX, y, pageW-marginX, y); y += 18;
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.text('HISTÓRICO DE TRATATIVAS', marginX, y); y += 16;
+    doc.setFontSize(9);
+    trilha.forEach((m,i)=>{
+      const role = m.autor === 'diretor' ? 'DIRETORIA' : 'SOLICITANTE';
+      const corpo = doc.splitTextToSize(m.texto || '', pageW - marginX*2 - 12);
+      brk(corpo.length*11 + 24);
+      doc.setFont('helvetica','bold');
+      doc.text(`${i+1}. ${role} — ${m.nome||''}`, marginX, y);
+      doc.setFont('helvetica','normal');
+      doc.text(fmtDateTime(m.timestamp), pageW-marginX, y, {align:'right'});
+      y += 12;
+      doc.text(corpo, marginX+12, y); y += corpo.length*11;
+      (m.anexos||[]).forEach(a=>{ doc.text('+ ' + a, marginX+12, y); y += 11; });
+      y += 6;
+    });
+  }
+
+  brk(120);
   y += 20;
+  doc.setFontSize(10);
   doc.setFont('helvetica','bold'); doc.text('Assinatura do Diretor Responsável:', marginX, y); y += 8;
   if(r.assinatura){
     try{ doc.addImage(r.assinatura, 'PNG', marginX, y, 160, 55); }catch(e){}
@@ -891,7 +1206,12 @@ async function loadAll(){
   try{
     const res = await api('list');
     if(!res.ok) throw new Error(res.error);
-    pendentes = res.items.filter(i=>i.status !== 'Aprovado').sort((a,b)=> b.timestamp.localeCompare(a.timestamp));
+    const ultimaAtiv = (r)=>{
+      const t = r.tratativas || [];
+      return t.length ? (t[t.length-1].timestamp || r.timestamp) : r.timestamp;
+    };
+    pendentes = res.items.filter(i=>i.status !== 'Aprovado')
+      .sort((a,b)=> String(ultimaAtiv(b)||'').localeCompare(String(ultimaAtiv(a)||'')));
     aprovados = res.items.filter(i=>i.status === 'Aprovado').sort((a,b)=> (b.dataAprovacao||'').localeCompare(a.dataAprovacao||''));
     renderPend();
     if(document.getElementById('viewDashboard').classList.contains('active') && dashUnlocked){ renderDash(); }
@@ -906,6 +1226,8 @@ window.openApprove = openApprove;
 window.openEdit = openEdit;
 window.openDelete = openDelete;
 window.exportPdf = exportPdf;
+window.openDevolver = openDevolver;
+window.openResponder = openResponder;
 </script>
 </body>
 </html>
