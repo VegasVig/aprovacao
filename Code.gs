@@ -116,6 +116,7 @@ function doPost(e) {
       case 'devolver': return respond_(devolverSolicitacao_(data));
       case 'responder': return respond_(responderSolicitacao_(data));
       case 'delete': return respond_(excluirSolicitacao_(data));
+      case 'arquivarPdf': return respond_(arquivarPdf_(data));
       default: return respond_({ ok: false, error: 'Ação POST desconhecida.' });
     }
   } catch (err) {
@@ -367,6 +368,79 @@ function responderSolicitacao_(data) {
 function parseArr_(raw) {
   try { var a = raw ? JSON.parse(raw) : []; return Array.isArray(a) ? a : []; }
   catch (e) { return []; }
+}
+
+// ---------- ARQUIVAMENTO DO PDF NO DRIVE ----------
+// O WhatsApp (wa.me) não aceita anexo — só texto. Então o PDF vai para uma pasta
+// do Drive e o que viaja na mensagem é o link. O nível de compartilhamento é
+// controlado pela propriedade PDF_ACESSO:
+//   'LINK'     -> qualquer pessoa com o link vê (padrão; necessário para fornecedor externo)
+//   'DOMINIO'  -> só quem tem e-mail do domínio Workspace da empresa
+//   'PRIVADO'  -> só quem você compartilhar manualmente (o link exige login autorizado)
+function pastaPdf_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('PASTA_PDF_ID');
+  if (id) {
+    try { return DriveApp.getFolderById(id); } catch (e) { /* pasta apagada: recria */ }
+  }
+  var nome = 'Vegas - Solicitacoes Aprovadas (PDF)';
+  var it = DriveApp.getFoldersByName(nome);
+  var folder = it.hasNext() ? it.next() : DriveApp.createFolder(nome);
+  props.setProperty('PASTA_PDF_ID', folder.getId());
+  return folder;
+}
+
+function arquivarPdf_(data) {
+  if (!data.base64) return { ok: false, error: 'PDF vazio.' };
+  var nome = data.filename || ('solicitacao_' + (data.numero || 'sn') + '.pdf');
+  var folder = pastaPdf_();
+
+  // Substitui a versão anterior do mesmo número em vez de acumular duplicatas.
+  var antigos = folder.getFilesByName(nome);
+  while (antigos.hasNext()) antigos.next().setTrashed(true);
+
+  var blob = Utilities.newBlob(Utilities.base64Decode(data.base64), 'application/pdf', nome);
+  var file = folder.createFile(blob);
+
+  var acesso = PropertiesService.getScriptProperties().getProperty('PDF_ACESSO') || 'LINK';
+  try {
+    if (acesso === 'LINK') file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    else if (acesso === 'DOMINIO') file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e) { /* conta pessoal não tem DOMAIN_WITH_LINK; mantém privado */ }
+
+  // Registra o envio na trilha — quem mandou, para qual número, com qual chave.
+  if (data.id && data.envio) {
+    try {
+      withLock_(function () {
+        var sh = sheet_();
+        var row = findRow_(sh, data.id);
+        if (row === -1) return;
+        var trilha = lerTratativas_(sh, row);
+        var e = data.envio;
+        trilha.push({
+          autor: 'diretor',
+          tipo: 'envio',
+          nome: e.remetente || sh.getRange(row, 13).getValue() || '',
+          texto: 'PDF enviado por WhatsApp para ' + (e.whatsapp || '—') +
+                 '. Favorecido PIX: ' + (e.favorecido || '—') +
+                 ' | chave: ' + mascararChave_(e.chave) +
+                 ' | valor: R$ ' + (e.valor || '0'),
+          anexos: [file.getUrl()],
+          timestamp: new Date().toISOString()
+        });
+        sh.getRange(row, 18).setValue(JSON.stringify(trilha));
+      });
+    } catch (err) { /* não impede a devolução do link */ }
+  }
+
+  return { ok: true, url: file.getUrl(), id: file.getId(), acesso: acesso };
+}
+
+// Nunca gravar chave PIX inteira em log: mantém só o suficiente para conferência.
+function mascararChave_(chave) {
+  var s = String(chave || '');
+  if (s.length <= 6) return s ? s.charAt(0) + '***' : '—';
+  return s.slice(0, 3) + '***' + s.slice(-3);
 }
 
 // ---------- NOTIFICAÇÃO (opcional) ----------

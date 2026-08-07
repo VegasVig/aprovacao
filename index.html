@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   :root{
     --bg:#0a0b0d;
@@ -209,6 +210,26 @@
     padding:6px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
   }
   .filter-bar button.active{border-color:var(--live);color:var(--silver-bright);background:rgba(90,169,230,.08);}
+
+  .hint{font-size:10px;color:var(--muted);margin-top:4px;}
+  .chk{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--silver);margin-top:10px;}
+  .chk input{accent-color:var(--live);width:15px;height:15px;}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+  .chip{
+    background:var(--bg-alt);border:1px solid var(--line);color:var(--silver);
+    font-size:11px;padding:5px 10px;display:inline-flex;align-items:center;gap:7px;
+  }
+  .chip:hover{border-color:var(--live);color:var(--silver-bright);}
+  .chip .x{color:var(--muted);font-size:14px;line-height:1;}
+  .chip .x:hover{color:var(--danger);}
+  .copy-row{display:flex;gap:8px;}
+  .copy-row input{flex:1;background:var(--bg-alt);border:1px solid var(--line);color:var(--silver-bright);padding:9px 10px;font-size:12px;font-family:'JetBrains Mono',monospace;}
+  .done-box{
+    background:var(--ok-bg);border:1px solid rgba(57,195,122,.35);border-left:3px solid var(--ok);
+    padding:12px 14px;font-size:12px;color:var(--silver);
+  }
+  .done-box b{display:block;color:var(--ok);font-size:13px;margin-bottom:3px;}
+  #qrHolder{display:none;}
 
   .empty{text-align:center;padding:50px 20px;color:var(--muted);font-size:13px;}
   .empty b{display:block;color:var(--silver);font-size:15px;margin-bottom:6px;font-family:'Rajdhani',sans-serif;}
@@ -431,6 +452,87 @@
   </div>
 </div>
 
+<!-- ===================== MODAL: ENVIAR (PDF + WHATSAPP + PIX) ===================== -->
+<div class="overlay" id="sendOverlay">
+  <div class="modal" style="max-width:600px;">
+    <h3>Enviar Solicitação</h3>
+    <div class="sub" id="sendSub"></div>
+
+    <div id="sendStep1">
+      <div class="field">
+        <label>WhatsApp de destino</label>
+        <input type="text" id="sdWhats" placeholder="5524992967691">
+        <span class="hint">Formato internacional, só números: 55 + DDD + número.</span>
+      </div>
+
+      <div class="subhead" style="margin-top:18px;">Pagamento via PIX</div>
+      <div id="sdSavedKeys" class="chips"></div>
+      <div class="field-row two">
+        <div class="field">
+          <label>Tipo de chave</label>
+          <select id="sdTipo">
+            <option value="cpf">CPF</option>
+            <option value="cnpj">CNPJ</option>
+            <option value="telefone">Telefone</option>
+            <option value="email">E-mail</option>
+            <option value="aleatoria">Aleatória (EVP)</option>
+          </select>
+        </div>
+        <div class="field"><label>Chave</label><input type="text" id="sdChave" placeholder="Cole a chave do fornecedor"></div>
+      </div>
+      <div class="field-row two">
+        <div class="field"><label>Favorecido</label><input type="text" id="sdFavorecido" placeholder="Nome de quem recebe"></div>
+        <div class="field"><label>Cidade</label><input type="text" id="sdCidade" value="VOLTA REDONDA"></div>
+      </div>
+      <div class="field-row two">
+        <div class="field">
+          <label>Valor</label>
+          <select id="sdValorModo">
+            <option value="total">Total aprovado</option>
+            <option value="peca">Só a peça</option>
+            <option value="mo">Só a mão de obra</option>
+            <option value="manual">Valor manual</option>
+          </select>
+        </div>
+        <div class="field"><label>R$</label><input type="number" step="0.01" min="0" id="sdValor"></div>
+      </div>
+      <label class="chk"><input type="checkbox" id="sdSalvarChave" checked> Guardar esta chave neste navegador para reuso</label>
+      <label class="chk"><input type="checkbox" id="sdNoPdf" checked> Incluir bloco PIX + QR Code no PDF</label>
+
+      <div class="err-msg" id="sdErr"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="sdCancel">Cancelar</button>
+        <button class="btn btn-primary" id="sdConfirm">Gerar PDF e Enviar</button>
+      </div>
+    </div>
+
+    <div id="sendStep2" style="display:none;">
+      <div class="done-box">
+        <b>PDF gerado e arquivado.</b>
+        Baixado para este computador e salvo no Drive.
+      </div>
+      <div class="field" style="margin-top:14px;">
+        <label>Link do PDF</label>
+        <div class="copy-row"><input type="text" id="sdLink" readonly><button class="btn btn-ghost btn-sm" data-copy="sdLink">Copiar</button></div>
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>PIX copia e cola</label>
+        <div class="copy-row"><input type="text" id="sdBrCode" readonly><button class="btn btn-ghost btn-sm" data-copy="sdBrCode">Copiar</button></div>
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>Mensagem</label>
+        <textarea id="sdMsg" style="min-height:130px;font-size:12px;"></textarea>
+        <span class="hint">Editável antes de abrir o WhatsApp.</span>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="sdClose">Fechar</button>
+        <button class="btn btn-ghost" data-copy="sdMsg">Copiar mensagem</button>
+        <button class="btn btn-primary" id="sdOpenWa">Abrir WhatsApp</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===================== MODAL: CONFIRMAR EXCLUSÃO ===================== -->
 <div class="overlay" id="delOverlay">
   <div class="modal" style="max-width:400px;">
@@ -443,6 +545,7 @@
   </div>
 </div>
 
+<div id="qrHolder"></div>
 <div class="toast-wrap" id="toastWrap"></div>
 
 <script>
@@ -450,7 +553,7 @@
    CONFIGURAÇÃO
    Cole aqui a URL do App da Web publicado a partir do Code.gs
    ====================================================================== */
-const API_URL = "https://script.google.com/macros/s/AKfycbzeBo_eK4ttIBD8_Cz275Toa7g64LIFvZc1FRdE0QrS2DlE6O8cz2IcAel-J2Q8aJU4/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbzg9goHI5wduUMU_-2zNJoUJHPIxeE7r2WxSjATXiQ8pn__eVl63xccPGfNTgci5k4n/exec";
 
 /* ---------------- estado ---------------- */
 let pendentes = [];
@@ -887,8 +990,9 @@ function renderDash(){
       ${r.assinatura ? `<img class="sig-thumb" src="${r.assinatura}" alt="assinatura">` : ''}
       ${threadHtml(r)}
       <div class="card-actions">
-        <button class="btn btn-ghost btn-sm" onclick="exportPdf('${r.id}')">Exportar PDF</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportPdf('${r.id}')">Baixar PDF</button>
         <button class="btn btn-danger btn-sm" onclick="openDelete('${r.id}')">Excluir</button>
+        <button class="btn btn-primary btn-sm" onclick="openSend('${r.id}')">Enviar (PDF + PIX)</button>
       </div>
     </div>
   `).join('');
@@ -1090,6 +1194,280 @@ document.getElementById('respConfirm').onclick = async ()=>{
   finally { btn.disabled = false; }
 };
 
+/* ======================================================================
+   PIX · BR Code estático (EMV-QRCPS do Bacen) + envio por WhatsApp
+   ====================================================================== */
+const WA_PADRAO = '5524992967691';
+
+function crc16(str){
+  let crc = 0xFFFF;
+  for(let i=0;i<str.length;i++){
+    crc ^= str.charCodeAt(i) << 8;
+    for(let j=0;j<8;j++){
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+      crc &= 0xFFFF;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4,'0');
+}
+function tlv(id, valor){
+  const v = String(valor);
+  return id + String(v.length).padStart(2,'0') + v;
+}
+function semAcento(s){
+  return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E]/g,'').toUpperCase().trim();
+}
+
+function gerarBrCode({chave, favorecido, cidade, valor, txid}){
+  const gui = tlv('00','br.gov.bcb.pix') + tlv('01', chave);
+  let p = '';
+  p += tlv('00','01');
+  p += tlv('26', gui);
+  p += tlv('52','0000');
+  p += tlv('53','986');
+  const n = parseFloat(valor||0);
+  if(n > 0) p += tlv('54', n.toFixed(2));
+  p += tlv('58','BR');
+  p += tlv('59', semAcento(favorecido).slice(0,25) || 'FORNECEDOR');
+  p += tlv('60', semAcento(cidade).slice(0,15) || 'BRASIL');
+  p += tlv('62', tlv('05', (txid || '***').slice(0,25)));
+  p += '6304';
+  return p + crc16(p);
+}
+
+const PIX_LABELS = {cpf:'CPF', cnpj:'CNPJ', telefone:'Telefone', email:'E-mail', aleatoria:'Aleatória (EVP)'};
+
+// Chave inválida gera QR que o banco recusa na hora de pagar — vale validar aqui.
+function validaChavePix(tipo, bruto){
+  const v = String(bruto||'').trim();
+  if(!v) return {ok:false, erro:'Informe a chave PIX.'};
+  const dig = v.replace(/\D/g,'');
+  if(tipo === 'cpf'){
+    if(dig.length !== 11) return {ok:false, erro:'CPF deve ter 11 dígitos.'};
+    if(!validaCpf(dig)) return {ok:false, erro:'CPF inválido (dígito verificador).'};
+    return {ok:true, chave:dig};
+  }
+  if(tipo === 'cnpj'){
+    if(dig.length !== 14) return {ok:false, erro:'CNPJ deve ter 14 dígitos.'};
+    return {ok:true, chave:dig};
+  }
+  if(tipo === 'telefone'){
+    let d = dig;
+    if(d.length === 11) d = '55' + d;
+    if(d.length !== 13) return {ok:false, erro:'Telefone deve ter DDD + 9 dígitos.'};
+    return {ok:true, chave:'+' + d};
+  }
+  if(tipo === 'email'){
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) return {ok:false, erro:'E-mail inválido.'};
+    if(v.length > 77) return {ok:false, erro:'E-mail excede 77 caracteres.'};
+    return {ok:true, chave:v.toLowerCase()};
+  }
+  const evp = v.toLowerCase();
+  if(!/^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/.test(evp)){
+    return {ok:false, erro:'Chave aleatória deve ser um UUID de 32 caracteres.'};
+  }
+  return {ok:true, chave:evp.length===32 ? evp.replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/,'$1-$2-$3-$4-$5') : evp};
+}
+
+function validaCpf(c){
+  if(/^(\d)\1{10}$/.test(c)) return false;
+  const dv = (base, peso) => {
+    let s = 0;
+    for(let i=0;i<base.length;i++) s += parseInt(base[i],10) * (peso - i);
+    const r = (s * 10) % 11;
+    return r === 10 ? 0 : r;
+  };
+  return dv(c.slice(0,9),10) === +c[9] && dv(c.slice(0,10),11) === +c[10];
+}
+
+function qrDataUrl(texto){
+  try{
+    const holder = document.getElementById('qrHolder');
+    holder.innerHTML = '';
+    new QRCode(holder, {text: texto, width: 300, height: 300, correctLevel: QRCode.CorrectLevel.M});
+    const cv = holder.querySelector('canvas');
+    return cv ? cv.toDataURL('image/png') : null;
+  } catch(e){ return null; }
+}
+
+/* ---------------- chaves salvas (localStorage) ---------------- */
+function lerChavesSalvas(){
+  try{ return JSON.parse(localStorage.getItem('vegasPixKeys') || '[]'); } catch(e){ return []; }
+}
+function salvarChave(item){
+  const arr = lerChavesSalvas().filter(k=>k.chave !== item.chave);
+  arr.unshift(item);
+  localStorage.setItem('vegasPixKeys', JSON.stringify(arr.slice(0,8)));
+}
+function removerChave(chave){
+  localStorage.setItem('vegasPixKeys', JSON.stringify(lerChavesSalvas().filter(k=>k.chave !== chave)));
+  renderChaves();
+}
+function renderChaves(){
+  const box = document.getElementById('sdSavedKeys');
+  const arr = lerChavesSalvas();
+  if(!arr.length){ box.innerHTML = ''; return; }
+  box.innerHTML = arr.map((k,i)=>`<button type="button" class="chip" data-k="${i}">
+      ${escapeHtml(k.favorecido || k.chave)} <span class="x" data-del="${i}">×</span>
+    </button>`).join('');
+  box.querySelectorAll('.chip').forEach(ch=>{
+    ch.onclick = (ev)=>{
+      const arr2 = lerChavesSalvas();
+      if(ev.target.dataset.del !== undefined){ removerChave(arr2[+ev.target.dataset.del].chave); return; }
+      const k = arr2[+ch.dataset.k];
+      document.getElementById('sdTipo').value = k.tipo;
+      document.getElementById('sdChave').value = k.chave;
+      document.getElementById('sdFavorecido').value = k.favorecido || '';
+      if(k.cidade) document.getElementById('sdCidade').value = k.cidade;
+    };
+  });
+}
+
+/* ---------------- modal de envio ---------------- */
+const sendOverlay = document.getElementById('sendOverlay');
+let sendTargetId = null, sendCtx = {};
+
+function totaisAprovados(r){
+  const p = parseFloat((r.pecaEscolhida||{}).valor) || 0;
+  const m = parseFloat((r.maoObraEscolhida||{}).valor) || 0;
+  return {peca:p, mo:m, total:p+m};
+}
+
+function openSend(id){
+  const r = aprovados.find(a=>a.id===id);
+  if(!r) return;
+  sendTargetId = id;
+  const t = totaisAprovados(r);
+  document.getElementById('sendSub').textContent = `Solicitação Nº ${r.numero} · ${r.veiculo} · total aprovado ${fmtBRL(t.total)}`;
+  document.getElementById('sdWhats').value = localStorage.getItem('vegasWaPadrao') || WA_PADRAO;
+  document.getElementById('sdChave').value = '';
+  document.getElementById('sdFavorecido').value = '';
+  document.getElementById('sdValorModo').value = 'total';
+  document.getElementById('sdValor').value = t.total.toFixed(2);
+  document.getElementById('sdErr').textContent = '';
+  document.getElementById('sendStep1').style.display = 'block';
+  document.getElementById('sendStep2').style.display = 'none';
+  renderChaves();
+  sendOverlay.classList.add('open');
+}
+document.getElementById('sdCancel').onclick = ()=> sendOverlay.classList.remove('open');
+document.getElementById('sdClose').onclick = ()=> sendOverlay.classList.remove('open');
+
+document.getElementById('sdValorModo').onchange = (e)=>{
+  const r = aprovados.find(a=>a.id===sendTargetId);
+  if(!r) return;
+  const t = totaisAprovados(r);
+  const campo = document.getElementById('sdValor');
+  if(e.target.value === 'total') campo.value = t.total.toFixed(2);
+  else if(e.target.value === 'peca') campo.value = t.peca.toFixed(2);
+  else if(e.target.value === 'mo') campo.value = t.mo.toFixed(2);
+  else campo.focus();
+};
+
+document.querySelectorAll('[data-copy]').forEach(b=>{
+  b.onclick = ()=>{
+    const el = document.getElementById(b.dataset.copy);
+    el.select ? el.select() : null;
+    navigator.clipboard.writeText(el.value).then(()=>toast('Copiado.'), ()=>toast('Não foi possível copiar.', true));
+  };
+});
+
+document.getElementById('sdConfirm').onclick = async ()=>{
+  const errEl = document.getElementById('sdErr');
+  const r = aprovados.find(a=>a.id===sendTargetId);
+  if(!r) return;
+
+  const whats = document.getElementById('sdWhats').value.replace(/\D/g,'');
+  if(whats.length < 12){ errEl.textContent = 'WhatsApp deve ter 55 + DDD + número (13 dígitos).'; return; }
+
+  const tipo = document.getElementById('sdTipo').value;
+  const vk = validaChavePix(tipo, document.getElementById('sdChave').value);
+  if(!vk.ok){ errEl.textContent = vk.erro; return; }
+
+  const favorecido = document.getElementById('sdFavorecido').value.trim();
+  if(!favorecido){ errEl.textContent = 'Informe o favorecido (quem recebe o PIX).'; return; }
+  const cidade = document.getElementById('sdCidade').value.trim();
+  const valor = parseFloat(document.getElementById('sdValor').value || 0);
+  if(!(valor > 0)){ errEl.textContent = 'Valor deve ser maior que zero.'; return; }
+
+  const btn = document.getElementById('sdConfirm');
+  btn.disabled = true; errEl.textContent = 'Gerando PDF...';
+
+  try{
+    const brcode = gerarBrCode({
+      chave: vk.chave, favorecido, cidade, valor,
+      txid: ('VEGAS' + r.numero).replace(/[^A-Za-z0-9]/g,'')
+    });
+    const pix = {
+      chave: vk.chave, tipoLabel: PIX_LABELS[tipo], favorecido, cidade, valor, brcode,
+      qr: qrDataUrl(brcode)
+    };
+
+    const usarNoPdf = document.getElementById('sdNoPdf').checked;
+    const doc = buildPdf(r, usarNoPdf ? pix : null);
+    const nome = `solicitacao_${r.numero}.pdf`;
+
+    doc.save(nome); // cópia local — "para mim"
+
+    errEl.textContent = 'Arquivando no Drive...';
+    const base64 = doc.output('datauristring').split(',')[1];
+    const res = await api('arquivarPdf', {
+      id: r.id, numero: r.numero, filename: nome, base64,
+      envio: {remetente: r.diretor, whatsapp: whats, favorecido, chave: vk.chave, valor: valor.toFixed(2)}
+    });
+    if(!res.ok) throw new Error(res.error || 'Falha ao arquivar no Drive.');
+
+    if(document.getElementById('sdSalvarChave').checked){
+      salvarChave({tipo, chave: vk.chave, favorecido, cidade});
+    }
+    localStorage.setItem('vegasWaPadrao', whats);
+
+    const t = totaisAprovados(r);
+    const msg = [
+      `*VEGAS VIGILÂNCIA E SEGURANÇA*`,
+      `Solicitação Nº ${r.numero} — APROVADA`,
+      ``,
+      `Veículo: ${r.veiculo}`,
+      `Setor: ${r.setor}`,
+      (r.pecaEscolhida ? `Peça: ${r.pecaEscolhida.nome} — ${fmtBRL(r.pecaEscolhida.valor)}` : null),
+      (r.maoObraEscolhida ? `Mão de obra: ${r.maoObraEscolhida.nome} — ${fmtBRL(r.maoObraEscolhida.valor)}` : null),
+      `*Total aprovado: ${fmtBRL(t.total)}*`,
+      `Aprovado por ${r.diretor || ''} em ${r.dataAprovacao ? new Date(r.dataAprovacao).toLocaleString('pt-BR') : ''}`,
+      ``,
+      `PDF: ${res.url}`,
+      ``,
+      `*PAGAMENTO PIX*`,
+      `Favorecido: ${favorecido}`,
+      `${PIX_LABELS[tipo]}: ${vk.chave}`,
+      `Valor: ${fmtBRL(valor)}`,
+      ``,
+      `Copia e cola:`,
+      brcode
+    ].filter(l => l !== null).join('\n');
+
+    sendCtx = {whats, msg};
+    document.getElementById('sdLink').value = res.url;
+    document.getElementById('sdBrCode').value = brcode;
+    document.getElementById('sdMsg').value = msg;
+    document.getElementById('sendStep1').style.display = 'none';
+    document.getElementById('sendStep2').style.display = 'block';
+    errEl.textContent = '';
+    if(res.acesso !== 'LINK'){
+      toast('PDF salvo com acesso restrito — quem receber o link precisa de permissão.', true);
+    }
+    await loadAll();
+  } catch(err){
+    errEl.textContent = String(err.message || err);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+document.getElementById('sdOpenWa').onclick = ()=>{
+  const texto = document.getElementById('sdMsg').value;
+  window.open(`https://wa.me/${sendCtx.whats}?text=${encodeURIComponent(texto)}`, '_blank');
+};
+
 /* ---------------- excluir ---------------- */
 const delOverlay = document.getElementById('delOverlay');
 function openDelete(id){ deleteTargetId = id; delOverlay.classList.add('open'); }
@@ -1106,9 +1484,7 @@ document.getElementById('delConfirm').onclick = async () => {
 };
 
 /* ---------------- exportar pdf ---------------- */
-function exportPdf(id){
-  const r = aprovados.find(a=>a.id===id);
-  if(!r) return;
+function buildPdf(r, pix){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({unit:'pt', format:'a4'});
   const marginX = 48; let y = 56;
@@ -1198,7 +1574,40 @@ function exportPdf(id){
   doc.setFont('helvetica','normal'); doc.setFontSize(9);
   doc.text(`${r.diretor||''}  ·  aprovado em ${r.dataAprovacao ? new Date(r.dataAprovacao).toLocaleString('pt-BR') : ''}`, marginX, y);
 
-  doc.save(`solicitacao_${r.numero}.pdf`);
+  // Bloco de pagamento — só quando o envio informa a chave.
+  if(pix && pix.brcode){
+    brk(150);
+    y += 26;
+    const boxTop = y - 14;
+    doc.setDrawColor(120); doc.setLineWidth(.8);
+    doc.roundedRect(marginX, boxTop, pageW - marginX*2, 128, 3, 3);
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.text('PAGAMENTO VIA PIX', marginX+14, y+4); y += 22;
+    doc.setFontSize(9);
+    const pl = (lab,val)=>{ doc.setFont('helvetica','bold'); doc.text(lab, marginX+14, y); doc.setFont('helvetica','normal'); doc.text(String(val||''), marginX+96, y); y += 14; };
+    pl('Favorecido:', pix.favorecido);
+    pl('Tipo de chave:', pix.tipoLabel);
+    pl('Chave:', pix.chave);
+    pl('Valor:', fmtBRL(pix.valor));
+    y += 4;
+    doc.setFont('helvetica','bold'); doc.text('Copia e cola:', marginX+14, y); y += 12;
+    doc.setFont('courier','normal'); doc.setFontSize(6.5);
+    const brLines = doc.splitTextToSize(pix.brcode, pageW - marginX*2 - 130);
+    doc.text(brLines, marginX+14, y);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    if(pix.qr){
+      try{ doc.addImage(pix.qr, 'PNG', pageW - marginX - 104, boxTop + 14, 90, 90); }catch(e){}
+    }
+    y = boxTop + 128;
+  }
+
+  return doc;
+}
+
+function exportPdf(id){
+  const r = aprovados.find(a=>a.id===id);
+  if(!r) return;
+  buildPdf(r, null).save(`solicitacao_${r.numero}.pdf`);
 }
 
 /* ---------------- carregar dados ---------------- */
@@ -1228,6 +1637,7 @@ window.openDelete = openDelete;
 window.exportPdf = exportPdf;
 window.openDevolver = openDevolver;
 window.openResponder = openResponder;
+window.openSend = openSend;
 </script>
 </body>
 </html>
