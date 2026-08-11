@@ -117,6 +117,7 @@ function doPost(e) {
       case 'responder': return respond_(responderSolicitacao_(data));
       case 'delete': return respond_(excluirSolicitacao_(data));
       case 'arquivarPdf': return respond_(arquivarPdf_(data));
+      case 'uploadComprovante': return respond_(uploadComprovante_(data));
       default: return respond_({ ok: false, error: 'Ação POST desconhecida.' });
     }
   } catch (err) {
@@ -340,7 +341,7 @@ function responderSolicitacao_(data) {
       var mo = parseArr_(sh.getRange(row, 10).getValue());
       novos.forEach(function (n) {
         if (!n || !String(n.nome || '').trim()) return;
-        var item = { nome: String(n.nome).trim(), valor: n.valor || 0, status: n.status || 'ok' };
+        var item = { nome: String(n.nome).trim(), valor: n.valor || 0, status: n.status || 'ok', comprovante: String(n.comprovante || '').trim() };
         if (n.tipo === 'maoObra') mo.push(item); else pecas.push(item);
         anexados.push((n.tipo === 'maoObra' ? 'Mão de obra' : 'Peça') + ': ' + item.nome + ' — R$ ' + item.valor);
       });
@@ -441,6 +442,47 @@ function mascararChave_(chave) {
   var s = String(chave || '');
   if (s.length <= 6) return s ? s.charAt(0) + '***' : '—';
   return s.slice(0, 3) + '***' + s.slice(-3);
+}
+
+// ---------- COMPROVANTE DE ORÇAMENTO (foto ou upload do solicitante) ----------
+// O solicitante pode anexar uma foto do orçamento ao lado do valor de cada
+// fornecedor (peça ou mão de obra). A foto vai para uma pasta própria do Drive
+// e o que fica salvo no item é só o link — o mesmo campo aceita colar um link
+// já pronto (ex.: PDF de orçamento no Drive/WhatsApp) em vez de subir foto.
+function pastaComprovantes_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('PASTA_COMPROVANTES_ID');
+  if (id) {
+    try { return DriveApp.getFolderById(id); } catch (e) { /* pasta apagada: recria */ }
+  }
+  var nome = 'Vegas - Comprovantes de Orcamento';
+  var it = DriveApp.getFoldersByName(nome);
+  var folder = it.hasNext() ? it.next() : DriveApp.createFolder(nome);
+  props.setProperty('PASTA_COMPROVANTES_ID', folder.getId());
+  return folder;
+}
+
+function uploadComprovante_(data) {
+  if (!data.base64) return { ok: false, error: 'Arquivo vazio.' };
+  var mimeType = data.mimeType || 'image/jpeg';
+  var nome = data.filename || ('comprovante_' + Utilities.getUuid() + '.jpg');
+  var folder = pastaComprovantes_();
+
+  var blob;
+  try {
+    blob = Utilities.newBlob(Utilities.base64Decode(data.base64), mimeType, nome);
+  } catch (e) {
+    return { ok: false, error: 'Não foi possível processar o arquivo enviado.' };
+  }
+  var file = folder.createFile(blob);
+
+  var acesso = PropertiesService.getScriptProperties().getProperty('PDF_ACESSO') || 'LINK';
+  try {
+    if (acesso === 'LINK') file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    else if (acesso === 'DOMINIO') file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e) { /* conta pessoal sem domínio: mantém padrão */ }
+
+  return { ok: true, url: file.getUrl(), id: file.getId() };
 }
 
 // ---------- NOTIFICAÇÃO (opcional) ----------
