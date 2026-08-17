@@ -331,6 +331,7 @@
         </div>
         <div class="field-row">
           <div class="field"><label>Placa</label><input type="text" id="fPlaca" placeholder="Ex: FOT6A75" style="text-transform:uppercase;"></div>
+          <div class="field"><label>Quilometragem <span style="color:#e05252;">*</span></label><input type="number" min="0" step="1" id="fKm" placeholder="Obrigatório"></div>
         </div>
 
         <div class="subhead">Descrição do Problema</div>
@@ -569,7 +570,7 @@
 
 <script>
 
-const API_URL = "https://script.google.com/macros/s/AKfycbzA52RZn2YMzIylz9BGPUa9fvdx63Er8vYlXAoATGP6f18TPGHLHFILptLVbndB1RxX/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwSJV9NBN3MndVqL1d7rdRp77r_fT0f0VpYS3zNWgJkTGksyNDO_DBo4js6lX7Da5ap/exec";
 
 /* ---------------- estado ---------------- */
 let pendentes = [];
@@ -807,6 +808,7 @@ function openEdit(id){
   document.getElementById('fSetor').value = r.setor || '';
   document.getElementById('fVeiculo').value = r.veiculo || '';
   document.getElementById('fPlaca').value = r.placa || '';
+  document.getElementById('fKm').value = (r.km != null ? r.km : '');
   document.getElementById('fObs').value = r.obs || '';
 
   (r.descricao && r.descricao.length ? r.descricao : ['']).forEach(d=>addDescRow(d));
@@ -822,6 +824,12 @@ function openEdit(id){
 /* ---------------- envio do formulário ---------------- */
 document.getElementById('reqForm').onsubmit = async (e) => {
   e.preventDefault();
+  const km = document.getElementById('fKm').value.trim();
+  if(!km){
+    document.getElementById('fKm').focus();
+    toast('A quilometragem é obrigatória.');
+    return;
+  }
   const descricao = [...document.querySelectorAll('#descList input')].map(i=>i.value.trim()).filter(Boolean);
   const pecas = [...document.querySelectorAll('#pecasList .dyn-row')].map(r=>({
     nome: r.querySelector('.s-nome').value.trim(),
@@ -842,6 +850,7 @@ document.getElementById('reqForm').onsubmit = async (e) => {
     setor: document.getElementById('fSetor').value.trim(),
     veiculo: document.getElementById('fVeiculo').value.trim(),
     placa: document.getElementById('fPlaca').value.trim().toUpperCase(),
+    km: km,
     descricao, pecas, maoObra,
     obs: document.getElementById('fObs').value.trim()
   };
@@ -1067,13 +1076,7 @@ function renderDash(){
         <span><b>Solicitante:</b> ${escapeHtml(r.solicitante)}</span>
         <span><b>Setor:</b> ${escapeHtml(r.setor)}</span>
         <span><b>Placa:</b> ${escapeHtml(r.placa||'—')}</span>
-      </div>
-      <div class="km-box" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin:10px 0;padding:10px;border:1px solid var(--line,#333);border-radius:8px;">
-        <div class="field" style="flex:1;min-width:140px;margin:0;">
-          <label>Quilometragem <span style="color:#e05252;">*</span></label>
-          <input type="number" min="0" step="1" class="km-input" id="km_${r.id}" value="${r.km!=null?escapeHtml(String(r.km)):''}" placeholder="Obrigatório" required>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="salvarKm('${r.id}')">Salvar KM</button>
+        <span><b>Quilometragem:</b> ${r.km!=null&&r.km!==''?escapeHtml(String(r.km)):'—'}</span>
       </div>
       <ol class="desc-list">${(r.descricao||[]).map(d=>`<li>${escapeHtml(d)}</li>`).join('')}</ol>
       ${chosenSupplierHtml('Fornecedor Peça', r.pecaEscolhida)}
@@ -1093,33 +1096,6 @@ function renderDash(){
 }
 
 document.getElementById('dashSearch').addEventListener('input', renderDash);
-
-async function salvarKm(id){
-  const input = document.getElementById('km_' + id);
-  const km = (input.value || '').trim();
-  if(!km){
-    input.focus();
-    toast('A quilometragem é obrigatória.');
-    return;
-  }
-  const btn = event.target;
-  const prev = btn.textContent;
-  btn.disabled = true; btn.textContent = 'Salvando...';
-  try{
-    const res = await api('salvarKm', { id, km, senha: dashPassword });
-    if(res.ok){
-      const reg = aprovados.find(r => r.id === id);
-      if(reg) reg.km = km;
-      toast('Quilometragem salva.');
-    } else {
-      toast(res.error || 'Erro ao salvar a quilometragem.');
-    }
-  } catch(err){
-    toast('Erro de conexão.');
-  } finally {
-    btn.disabled = false; btn.textContent = prev;
-  }
-}
 
 /* ---------------- modal aprovar + assinatura ---------------- */
 const approveOverlay = document.getElementById('approveOverlay');

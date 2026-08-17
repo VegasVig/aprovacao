@@ -117,7 +117,6 @@ function doPost(e) {
       case 'devolver': return respond_(devolverSolicitacao_(data));
       case 'responder': return respond_(responderSolicitacao_(data));
       case 'delete': return respond_(excluirSolicitacao_(data));
-      case 'salvarKm': return respond_(salvarKm_(data));
       case 'arquivarPdf': return respond_(arquivarPdf_(data));
       case 'uploadComprovante': return respond_(uploadComprovante_(data));
       default: return respond_({ ok: false, error: 'Ação POST desconhecida.' });
@@ -247,28 +246,13 @@ function editarSolicitacao_(data) {
   ]]);
   sh.getRange(row, 11).setValue(data.obs || '');
   if (data.placa !== undefined) sh.getRange(row, 19).setValue(data.placa || '');
+  if (data.km !== undefined) { sh.getRange(row, 20).setNumberFormat('@'); sh.getRange(row, 20).setValue(data.km || ''); }
   return { ok: true };
 }
 
 function checarSenha_(data) {
   var senha = PropertiesService.getScriptProperties().getProperty('DASHBOARD_PASSWORD');
   return { ok: data.senha === senha };
-}
-
-// Salva a quilometragem informada no dashboard (obrigatória, protegida por senha).
-function salvarKm_(data) {
-  var senha = PropertiesService.getScriptProperties().getProperty('DASHBOARD_PASSWORD');
-  if (data.senha !== senha) return { ok: false, error: 'Senha inválida.' };
-  var km = String(data.km == null ? '' : data.km).trim();
-  if (!km) return { ok: false, error: 'A quilometragem é obrigatória.' };
-  return withLock_(function () {
-    var sh = sheet_();
-    var row = findRow_(sh, data.id);
-    if (row === -1) return { ok: false, error: 'Solicitação não encontrada.' };
-    sh.getRange(row, 20).setNumberFormat('@');
-    sh.getRange(row, 20).setValue(km);
-    return { ok: true };
-  });
 }
 
 function findRow_(sh, id) {
