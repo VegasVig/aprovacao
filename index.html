@@ -337,6 +337,12 @@
         </div>
         <div class="field-row">
           <div class="field"><label>Placa</label><input type="text" id="fPlaca" placeholder="Ex: FOT6A75" style="text-transform:uppercase;"></div>
+          <div class="field"><label>Unidade</label>
+            <select id="fUnidade">
+              <option value="Volta Redonda">Volta Redonda</option>
+              <option value="Niterói">Niterói</option>
+            </select>
+          </div>
           <div class="field"><label>Quilometragem <span style="color:#e05252;">*</span></label><input type="number" min="0" step="1" id="fKm" placeholder="Obrigatório"></div>
         </div>
 
@@ -589,7 +595,7 @@
 
 <script>
 
-const API_URL = "https://script.google.com/macros/s/AKfycbxxZv3RlIWCWSVCG80s1_qu8jgdrfrY4g3fN-nq_oOjUoNoIjyxTHk8ij9G2wYa1U3E/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbz-nwxypR1AbVkV1Rx2hWASZqeJ0l5ZfDunCS5qUAF0r7LGWAGCOL40r4dA_VIGwAoC/exec";
 
 /* ---------------- estado ---------------- */
 let pendentes = [];
@@ -849,6 +855,7 @@ function openEdit(id){
   }
   document.getElementById('fPlaca').value = r.placa || '';
   document.getElementById('fPlaca').readOnly = false;
+  document.getElementById('fUnidade').value = r.unidade || 'Volta Redonda';
   document.getElementById('fKm').value = (r.km != null ? r.km : '');
   document.getElementById('fObs').value = r.obs || '';
 
@@ -891,6 +898,7 @@ document.getElementById('reqForm').onsubmit = async (e) => {
     setor: document.getElementById('fSetor').value.trim(),
     veiculo: document.getElementById('fVeiculo').value.trim(),
     placa: document.getElementById('fPlaca').value.trim().toUpperCase(),
+    unidade: document.getElementById('fUnidade').value,
     km: km,
     descricao, pecas, maoObra,
     obs: document.getElementById('fObs').value.trim()
@@ -1133,6 +1141,7 @@ function renderDash(){
         <span><b>Solicitante:</b> ${escapeHtml(r.solicitante)}</span>
         <span><b>Setor:</b> ${escapeHtml(r.setor)}</span>
         <span><b>Placa:</b> ${escapeHtml(r.placa||'—')}</span>
+        <span><b>Unidade:</b> ${escapeHtml(r.unidade||'—')}</span>
         <span><b>Quilometragem:</b> ${r.km!=null&&r.km!==''?escapeHtml(String(r.km)):'—'}</span>
       </div>
       <ol class="desc-list">${(r.descricao||[]).map(d=>`<li>${escapeHtml(d)}</li>`).join('')}</ol>
@@ -1668,6 +1677,7 @@ function buildPdf(r, pix){
   line('Setor:', r.setor);
   line('Veículo:', r.veiculo);
   line('Placa:', r.placa || '—');
+  line('Unidade:', r.unidade || '—');
   line('Quilometragem:', r.km != null && r.km !== '' ? r.km : '—');
   y += 6;
 

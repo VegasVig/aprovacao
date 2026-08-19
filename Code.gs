@@ -25,7 +25,7 @@ var HEADERS = [
   'descricaoJSON', 'pecasJSON', 'maoObraJSON', 'obs',
   'status', 'diretor', 'dataAprovacao', 'assinatura',
   'pecaEscolhidaJSON', 'maoObraEscolhidaJSON', 'tratativasJSON',
-  'placa', 'km'
+  'placa', 'km', 'unidade'
 ];
 
 // Estados possíveis:
@@ -227,7 +227,8 @@ function criarSolicitacao_(data) {
     '',
     '[]',
     data.placa || '',
-    data.km || ''
+    data.km || '',
+    data.unidade || ''
   ]]);
   return { ok: true, id: id, numero: numero };
 }
@@ -260,6 +261,7 @@ function editarSolicitacao_(data) {
   sh.getRange(row, 11).setValue(data.obs || '');
   if (data.placa !== undefined) sh.getRange(row, 19).setValue(data.placa || '');
   if (data.km !== undefined) { sh.getRange(row, 20).setNumberFormat('@'); sh.getRange(row, 20).setValue(data.km || ''); }
+  if (data.unidade !== undefined) sh.getRange(row, 21).setValue(data.unidade || '');
   return { ok: true };
 }
 
