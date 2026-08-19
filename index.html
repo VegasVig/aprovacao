@@ -327,7 +327,13 @@
           <div class="field"><label>Data</label><input type="date" id="fData"></div>
           <div class="field"><label>Solicitante</label><input type="text" id="fSolicitante" placeholder="Nome(s)"></div>
           <div class="field"><label>Setor</label><input type="text" id="fSetor" placeholder="Ex: Frota de Veículos"></div>
-          <div class="field"><label>Veículo</label><input type="text" id="fVeiculo" placeholder="Ex: Palio Faire"></div>
+          <div class="field"><label>Veículo</label>
+            <select id="fVeiculoSel" onchange="onVeiculoSelect()">
+              <option value="">— selecione um carro —</option>
+              <option value="__novo__">➕ Digitar novo carro</option>
+            </select>
+            <input type="text" id="fVeiculo" placeholder="Ex: Palio Faire" style="display:none;margin-top:6px;">
+          </div>
         </div>
         <div class="field-row">
           <div class="field"><label>Placa</label><input type="text" id="fPlaca" placeholder="Ex: FOT6A75" style="text-transform:uppercase;"></div>
@@ -385,9 +391,17 @@
         <h2>Solicitações Aprovadas</h2>
         <span class="count mono" id="dashCount">0 registros</span>
       </div>
-      <div class="field" style="margin-bottom:16px;max-width:340px;">
-        <label>Buscar por placa</label>
-        <input type="text" id="dashSearch" placeholder="Digite a placa..." style="text-transform:uppercase;">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
+        <div class="field" style="max-width:340px;flex:1;min-width:220px;">
+          <label>Buscar por placa</label>
+          <input type="text" id="dashSearch" placeholder="Digite a placa..." style="text-transform:uppercase;">
+        </div>
+        <div class="field" style="max-width:340px;flex:1;min-width:220px;">
+          <label>Filtrar por carro</label>
+          <select id="dashVeiculo" onchange="renderDash()">
+            <option value="">— todos os carros —</option>
+          </select>
+        </div>
       </div>
       <div class="card-grid" id="dashList"></div>
     </div>
@@ -502,7 +516,12 @@
       </div>
       <div class="field-row two">
         <div class="field"><label>Favorecido</label><input type="text" id="sdFavorecido" placeholder="Nome de quem recebe"></div>
-        <div class="field"><label>Cidade</label><input type="text" id="sdCidade" value="VOLTA REDONDA"></div>
+        <div class="field"><label>Cidade</label>
+          <select id="sdCidade">
+            <option value="VOLTA REDONDA">VOLTA REDONDA</option>
+            <option value="NITERÓI">NITERÓI</option>
+          </select>
+        </div>
       </div>
       <div class="field-row two">
         <div class="field">
@@ -570,7 +589,7 @@
 
 <script>
 
-const API_URL = "https://script.google.com/macros/s/AKfycbwSJV9NBN3MndVqL1d7rdRp77r_fT0f0VpYS3zNWgJkTGksyNDO_DBo4js6lX7Da5ap/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxxZv3RlIWCWSVCG80s1_qu8jgdrfrY4g3fN-nq_oOjUoNoIjyxTHk8ij9G2wYa1U3E/exec";
 
 /* ---------------- estado ---------------- */
 let pendentes = [];
@@ -764,6 +783,13 @@ function resetForm(){
   document.getElementById('pecasList').innerHTML = '';
   document.getElementById('maoObraList').innerHTML = '';
   document.getElementById('fData').value = new Date().toISOString().slice(0,10);
+  // volta o veículo ao estado inicial (dropdown, sem campo de digitar)
+  const vsel = document.getElementById('fVeiculoSel');
+  const vinp = document.getElementById('fVeiculo');
+  if(vsel) vsel.value = '';
+  if(vinp){ vinp.style.display = 'none'; vinp.value = ''; }
+  const placa = document.getElementById('fPlaca');
+  if(placa){ placa.value = ''; placa.readOnly = false; }
   addDescRow(); addSupplierRow('pecasList'); addSupplierRow('maoObraList');
 }
 
@@ -806,8 +832,23 @@ function openEdit(id){
   document.getElementById('fData').value = String(r.data||'').split('T')[0] || new Date().toISOString().slice(0,10);
   document.getElementById('fSolicitante').value = r.solicitante || '';
   document.getElementById('fSetor').value = r.setor || '';
-  document.getElementById('fVeiculo').value = r.veiculo || '';
+  // veículo: tenta casar com a lista; se achar, seleciona; senão, modo "digitar"
+  const vsel = document.getElementById('fVeiculoSel');
+  const vinp = document.getElementById('fVeiculo');
+  const match = veiculos.find(v => String(v.veiculo||'').toLowerCase() === String(r.veiculo||'').toLowerCase());
+  if(match && vsel){
+    vsel.value = match.veiculo;
+    vinp.style.display = 'none';
+    vinp.value = match.veiculo;
+  } else if(vsel){
+    vsel.value = '__novo__';
+    vinp.style.display = 'block';
+    vinp.value = r.veiculo || '';
+  } else {
+    vinp.value = r.veiculo || '';
+  }
   document.getElementById('fPlaca').value = r.placa || '';
+  document.getElementById('fPlaca').readOnly = false;
   document.getElementById('fKm').value = (r.km != null ? r.km : '');
   document.getElementById('fObs').value = r.obs || '';
 
@@ -864,6 +905,18 @@ document.getElementById('reqForm').onsubmit = async (e) => {
       : await api('create', payload);
     if(res.ok){
       toast(isEdit ? 'Solicitação atualizada com sucesso.' : `Solicitação Nº ${res.numero} enviada para aprovação.`);
+      // Se o veículo ainda não está cadastrado, salva para os próximos pedidos.
+      if(payload.veiculo){
+        const jaTem = veiculos.some(v =>
+          (payload.placa && String(v.placa||'').toUpperCase() === payload.placa) ||
+          (!payload.placa && String(v.veiculo||'').toLowerCase() === payload.veiculo.toLowerCase())
+        );
+        if(!jaTem){
+          api('salvarVeiculo', {veiculo: payload.veiculo, placa: payload.placa})
+            .then(r => { if(r && r.ok){ veiculos = r.veiculos || veiculos; popularVeiculos(); } })
+            .catch(()=>{});
+        }
+      }
       formPanel.classList.remove('open');
       toggleFormBtn.textContent = '+ Nova Solicitação';
       editingId = null;
@@ -1053,9 +1106,13 @@ async function unlockDashboard(refresh){
 function renderDash(){
   const wrap = document.getElementById('dashList');
   const term = (document.getElementById('dashSearch')?.value || '').trim().toUpperCase();
-  const lista = term
+  const carroSel = (document.getElementById('dashVeiculo')?.value || '').trim();
+  let lista = term
     ? aprovados.filter(r => String(r.placa||'').toUpperCase().includes(term))
     : aprovados;
+  if(carroSel){
+    lista = lista.filter(r => String(r.veiculo||'').trim().toLowerCase() === carroSel.toLowerCase());
+  }
   document.getElementById('dashCount').textContent = `${lista.length} registro${lista.length===1?'':'s'}`;
   if(!lista.length){
     wrap.innerHTML = term
@@ -1721,6 +1778,64 @@ function exportPdf(id){
   buildPdf(r, null).save(`solicitacao_${r.numero}.pdf`);
 }
 
+/* ---------------- veículos cadastrados ---------------- */
+let veiculos = []; // [{veiculo, placa}]
+
+async function loadVeiculos(){
+  try{
+    const res = await api('listVeiculos');
+    if(res && res.ok){ veiculos = res.veiculos || []; popularVeiculos(); }
+  }catch(err){ /* silencioso: se falhar, o campo novo ainda funciona */ }
+}
+
+function popularVeiculos(){
+  // garante ordem alfabética também no cliente (defesa dupla)
+  veiculos = (veiculos||[]).slice().sort((a,b)=>
+    String(a.veiculo||'').localeCompare(String(b.veiculo||''), 'pt-BR', {sensitivity:'base'})
+  );
+  // dropdown do formulário
+  const sel = document.getElementById('fVeiculoSel');
+  if(sel){
+    const atual = sel.value;
+    sel.innerHTML = '<option value="">— selecione um carro —</option>'
+      + veiculos.map(v => `<option value="${escapeHtml(v.veiculo)}" data-placa="${escapeHtml(v.placa||'')}">${escapeHtml(v.veiculo)}${v.placa?` (${escapeHtml(v.placa)})`:''}</option>`).join('')
+      + '<option value="__novo__">➕ Digitar novo carro</option>';
+    if(atual) sel.value = atual;
+  }
+  // dropdown do dashboard
+  const dsel = document.getElementById('dashVeiculo');
+  if(dsel){
+    const atual = dsel.value;
+    dsel.innerHTML = '<option value="">— todos os carros —</option>'
+      + veiculos.map(v => `<option value="${escapeHtml(v.veiculo)}">${escapeHtml(v.veiculo)}${v.placa?` (${escapeHtml(v.placa)})`:''}</option>`).join('');
+    if(atual) dsel.value = atual;
+  }
+}
+
+function onVeiculoSelect(){
+  const sel = document.getElementById('fVeiculoSel');
+  const inp = document.getElementById('fVeiculo');
+  const placa = document.getElementById('fPlaca');
+  if(sel.value === '__novo__'){
+    // modo digitar novo
+    inp.style.display = 'block';
+    inp.value = '';
+    inp.focus();
+    if(placa){ placa.value=''; placa.readOnly=false; }
+  } else if(sel.value === ''){
+    inp.style.display = 'none';
+    inp.value = '';
+    if(placa){ placa.value=''; placa.readOnly=false; }
+  } else {
+    // escolheu um carro da lista
+    inp.style.display = 'none';
+    inp.value = sel.value;
+    const opt = sel.options[sel.selectedIndex];
+    const p = opt.getAttribute('data-placa') || '';
+    if(placa){ placa.value = p; placa.readOnly = !!p; }
+  }
+}
+
 /* ---------------- carregar dados ---------------- */
 async function loadAll(){
   try{
@@ -1740,9 +1855,13 @@ async function loadAll(){
   }
 }
 
+
 resetForm();
 loadAll();
+loadVeiculos();
 window.openApprove = openApprove;
+window.onVeiculoSelect = onVeiculoSelect;
+window.renderDash = renderDash;
 window.openEdit = openEdit;
 window.openDelete = openDelete;
 window.exportPdf = exportPdf;

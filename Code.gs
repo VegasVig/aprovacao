@@ -18,6 +18,8 @@
  */
 
 var SHEET_NAME = 'Solicitacoes';
+var SHEET_VEICULOS = 'Veiculos';
+var HEADERS_VEICULOS = ['veiculo', 'placa', 'timestamp'];
 var HEADERS = [
   'id', 'numero', 'timestamp', 'data', 'solicitante', 'setor', 'veiculo',
   'descricaoJSON', 'pecasJSON', 'maoObraJSON', 'obs',
@@ -59,6 +61,14 @@ function configurarInicial() {
   }
   var counter = props.getProperty('CONTADOR');
   if (!counter) props.setProperty('CONTADOR', '0');
+
+  // Aba de veículos cadastrados (para o solicitante escolher da lista)
+  var shV = ss.getSheetByName(SHEET_VEICULOS);
+  if (!shV) {
+    shV = ss.insertSheet(SHEET_VEICULOS);
+    shV.appendRow(HEADERS_VEICULOS);
+    shV.setFrozenRows(1);
+  }
 }
 
 // Garante que planilhas já implantadas anteriormente ganhem as colunas novas
@@ -99,6 +109,7 @@ function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || 'list';
   try {
     if (action === 'list') return respond_(listSolicitacoes_());
+    if (action === 'listVeiculos') return respond_(listVeiculos_());
     return respond_({ ok: false, error: 'Ação GET desconhecida.' });
   } catch (err) {
     return respond_({ ok: false, error: String(err) });
@@ -119,6 +130,8 @@ function doPost(e) {
       case 'delete': return respond_(excluirSolicitacao_(data));
       case 'arquivarPdf': return respond_(arquivarPdf_(data));
       case 'uploadComprovante': return respond_(uploadComprovante_(data));
+      case 'listVeiculos': return respond_(listVeiculos_());
+      case 'salvarVeiculo': return respond_(salvarVeiculo_(data));
       default: return respond_({ ok: false, error: 'Ação POST desconhecida.' });
     }
   } catch (err) {
@@ -536,4 +549,57 @@ function excluirSolicitacao_(data) {
 
   sh.deleteRow(row);
   return { ok: true };
+}
+
+// ---------- VEÍCULOS CADASTRADOS ----------
+
+function sheetVeiculos_() {
+  var ss = getSpreadsheet_();
+  var sh = ss.getSheetByName(SHEET_VEICULOS);
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_VEICULOS);
+    sh.appendRow(HEADERS_VEICULOS);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// Retorna a lista de veículos cadastrados, em ordem alfabética.
+function listVeiculos_() {
+  var sh = sheetVeiculos_();
+  var last = sh.getLastRow();
+  if (last < 2) return { ok: true, veiculos: [] };
+  var values = sh.getRange(2, 1, last - 1, 2).getValues();
+  var list = values
+    .filter(function (r) { return String(r[0]).trim() !== ''; })
+    .map(function (r) { return { veiculo: String(r[0]).trim(), placa: String(r[1]).trim() }; });
+  // ordem alfabética pelo nome do veículo (ignorando maiúsc/minúsc e acentos)
+  list.sort(function (a, b) {
+    return a.veiculo.localeCompare(b.veiculo, 'pt-BR', { sensitivity: 'base' });
+  });
+  return { ok: true, veiculos: list };
+}
+
+// Salva um veículo novo se ainda não existir (compara por placa; se não houver
+// placa, compara por nome). Idempotente: chamar de novo com o mesmo carro não duplica.
+function salvarVeiculo_(data) {
+  return withLock_(function () {
+    var veiculo = String(data.veiculo || '').trim();
+    var placa = String(data.placa || '').trim().toUpperCase();
+    if (!veiculo) return { ok: false, error: 'Nome do veículo vazio.' };
+
+    var sh = sheetVeiculos_();
+    var last = sh.getLastRow();
+    var existentes = last >= 2 ? sh.getRange(2, 1, last - 1, 2).getValues() : [];
+    var jaTem = existentes.some(function (r) {
+      var v = String(r[0]).trim().toLowerCase();
+      var p = String(r[1]).trim().toUpperCase();
+      if (placa) return p === placa;      // se tem placa, a placa é a chave
+      return v === veiculo.toLowerCase();  // senão, o nome
+    });
+    if (!jaTem) {
+      sh.appendRow([veiculo, placa, new Date().toISOString()]);
+    }
+    return listVeiculos_();
+  });
 }
