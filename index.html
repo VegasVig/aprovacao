@@ -1050,7 +1050,7 @@ function renderPend(){
       <div class="card-top">
         <div>
           <div class="numero mono">SOLICITAÇÃO Nº ${r.numero}</div>
-          <div class="veiculo">${escapeHtml(r.veiculo)}</div>
+          <div class="veiculo">${escapeHtml(r.veiculo)}${r.placa ? ` · <span class="mono">${escapeHtml(r.placa)}</span>` : ''}</div>
         </div>
         ${statusBadgeHtml(r)}
       </div>
@@ -1058,6 +1058,8 @@ function renderPend(){
         <span><b>Data:</b> ${fmtDate(r.data)}</span>
         <span><b>Solicitante:</b> ${escapeHtml(r.solicitante)}</span>
         <span><b>Setor:</b> ${escapeHtml(r.setor)}</span>
+        <span><b>Placa:</b> ${escapeHtml(r.placa||'—')}</span>
+        <span><b>Quilometragem:</b> ${r.km!=null&&r.km!==''?escapeHtml(String(r.km)):'—'}</span>
       </div>
       <ol class="desc-list">${(r.descricao||[]).map(d=>`<li>${escapeHtml(d)}</li>`).join('')}</ol>
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px;">Fornecedor Peça</div>
