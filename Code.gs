@@ -25,7 +25,8 @@ var HEADERS = [
   'descricaoJSON', 'pecasJSON', 'maoObraJSON', 'obs',
   'status', 'diretor', 'dataAprovacao', 'assinatura',
   'pecaEscolhidaJSON', 'maoObraEscolhidaJSON', 'tratativasJSON',
-  'placa', 'km', 'unidade'
+  'placa', 'km', 'unidade',
+  'realizado', 'dataRealizado'
 ];
 
 // Estados possíveis:
@@ -125,6 +126,7 @@ function doPost(e) {
       case 'update': return respond_(editarSolicitacao_(data));
       case 'checkPassword': return respond_(checarSenha_(data));
       case 'approve': return respond_(aprovarSolicitacao_(data));
+      case 'marcarRealizado': return respond_(marcarRealizado_(data));
       case 'devolver': return respond_(devolverSolicitacao_(data));
       case 'responder': return respond_(responderSolicitacao_(data));
       case 'delete': return respond_(excluirSolicitacao_(data));
@@ -276,6 +278,29 @@ function findRow_(sh, id) {
     if (values[i][0] === id) return i + 1; // linha real na planilha (1-indexed)
   }
   return -1;
+}
+
+// Marca (ou desmarca) uma solicitação APROVADA como "serviço realizado".
+// Grava nas colunas 22 (realizado) e 23 (dataRealizado).
+function marcarRealizado_(data) {
+  return withLock_(function () {
+    var sh = sheet_();
+    var row = findRow_(sh, data.id);
+    if (row === -1) return { ok: false, error: 'Solicitação não encontrada.' };
+    if (sh.getRange(row, 12).getValue() !== ST_APROVADO) {
+      return { ok: false, error: 'Só é possível marcar como realizado uma solicitação já aprovada.' };
+    }
+    var feito = (data.realizado === true || data.realizado === 'true');
+    sh.getRange(row, 23).setNumberFormat('@'); // dataRealizado como texto
+    if (feito) {
+      sh.getRange(row, 22).setValue('Sim');
+      sh.getRange(row, 23).setValue(new Date().toISOString());
+    } else {
+      sh.getRange(row, 22).setValue('');
+      sh.getRange(row, 23).setValue('');
+    }
+    return { ok: true };
+  });
 }
 
 function aprovarSolicitacao_(data) {
