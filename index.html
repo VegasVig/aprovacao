@@ -154,6 +154,20 @@
     pointer-events:none;white-space:nowrap;
     text-transform:uppercase;
   }
+  /* Carimbo "CANCELADO" sobreposto na ficha */
+  .card.cancelado::after{
+    content:"CANCELADO";
+    position:absolute;top:38%;left:50%;
+    transform:translate(-50%,-50%) rotate(-18deg);
+    font-family:'Rajdhani',sans-serif;font-weight:700;
+    font-size:40px;letter-spacing:.1em;
+    color:rgba(226,84,63,.6);
+    border:4px solid rgba(226,84,63,.6);
+    border-radius:10px;padding:6px 24px;
+    pointer-events:none;white-space:nowrap;
+    text-transform:uppercase;
+  }
+  .cancel-tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#e2543f;font-weight:600;margin-bottom:10px;}
   .feito-tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#2ec77f;font-weight:600;margin-bottom:10px;}
   .card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px;}
   .card-top .numero{font-size:12px;color:var(--live);letter-spacing:.05em;}
@@ -1146,14 +1160,15 @@ function renderDash(){
     return;
   }
   wrap.innerHTML = lista.map(r => `
-    <div class="card${r.realizado==='Sim' ? ' feito' : ''}">
+    <div class="card${r.cancelado==='Sim' ? ' cancelado' : (r.realizado==='Sim' ? ' feito' : '')}">
       <div class="card-top">
         <div>
           <div class="numero mono">SOLICITAÇÃO Nº ${r.numero}</div>
           <div class="veiculo">${escapeHtml(r.veiculo)}${r.placa ? ` · <span class="mono">${escapeHtml(r.placa)}</span>` : ''}</div>
         </div>
       </div>
-      ${r.realizado==='Sim' ? `<div class="feito-tag">✔ Serviço realizado${r.dataRealizado ? ' em '+new Date(r.dataRealizado).toLocaleDateString('pt-BR') : ''}</div>` : ''}
+      ${r.cancelado==='Sim' ? `<div class="cancel-tag">✖ Cancelado${r.dataCancelado ? ' em '+new Date(r.dataCancelado).toLocaleDateString('pt-BR') : ''}${r.motivoCancelado ? ' · '+escapeHtml(r.motivoCancelado) : ''}</div>` : ''}
+      ${r.realizado==='Sim' && r.cancelado!=='Sim' ? `<div class="feito-tag">✔ Serviço realizado${r.dataRealizado ? ' em '+new Date(r.dataRealizado).toLocaleDateString('pt-BR') : ''}</div>` : ''}
       <div class="card-meta">
         <span><b>Data:</b> ${fmtDate(r.data)}</span>
         <span><b>Solicitante:</b> ${escapeHtml(r.solicitante)}</span>
@@ -1171,7 +1186,8 @@ function renderDash(){
       ${r.assinatura ? `<img class="sig-thumb" src="${r.assinatura}" alt="assinatura">` : ''}
       ${threadHtml(r)}
       <div class="card-actions">
-        <button class="btn ${r.realizado==='Sim'?'btn-ghost':'btn-primary'} btn-sm" onclick="toggleRealizado('${r.id}', ${r.realizado==='Sim'?'false':'true'})">${r.realizado==='Sim'?'Desfazer realizado':'✔ Marcar como realizado'}</button>
+        ${r.cancelado==='Sim' ? '' : `<button class="btn ${r.realizado==='Sim'?'btn-ghost':'btn-primary'} btn-sm" onclick="toggleRealizado('${r.id}', ${r.realizado==='Sim'?'false':'true'})">${r.realizado==='Sim'?'Desfazer realizado':'✔ Marcar como realizado'}</button>`}
+        <button class="btn ${r.cancelado==='Sim'?'btn-ghost':'btn-danger'} btn-sm" onclick="toggleCancelado('${r.id}', ${r.cancelado==='Sim'?'false':'true'})">${r.cancelado==='Sim'?'Desfazer cancelamento':'✖ Cancelar'}</button>
         <button class="btn btn-ghost btn-sm" onclick="exportPdf('${r.id}')">Baixar PDF</button>
         <button class="btn btn-danger btn-sm" onclick="openDelete('${r.id}')">Excluir</button>
         <button class="btn btn-primary btn-sm" onclick="openSend('${r.id}')">Enviar (PDF + PIX)</button>
@@ -1886,6 +1902,34 @@ async function toggleRealizado(id, realizado){
   }
 }
 window.toggleRealizado = toggleRealizado;
+
+/* ---------------- marcar solicitação como cancelada ---------------- */
+async function toggleCancelado(id, cancelado){
+  const r = aprovados.find(x=>x.id===id);
+  if(!r) return;
+  let motivo = '';
+  if(cancelado){
+    motivo = prompt('Cancelar esta solicitação?\nInforme o motivo (opcional):', '');
+    if(motivo === null) return; // clicou em "Cancelar" no prompt
+    motivo = motivo.trim();
+  } else if(!confirm('Desfazer o cancelamento desta ficha?')) return;
+  const antes = { cancelado: r.cancelado, dataCancelado: r.dataCancelado, motivoCancelado: r.motivoCancelado,
+                  realizado: r.realizado, dataRealizado: r.dataRealizado };
+  r.cancelado = cancelado ? 'Sim' : '';
+  r.dataCancelado = cancelado ? new Date().toISOString() : '';
+  r.motivoCancelado = cancelado ? motivo : '';
+  if(cancelado){ r.realizado = ''; r.dataRealizado = ''; }
+  renderDash();
+  try{
+    const res = await api('marcarCancelado', { id, cancelado, motivo });
+    if(!res.ok) throw new Error(res.error||'Falha ao salvar');
+  }catch(err){
+    Object.assign(r, antes);
+    renderDash();
+    alert('Não foi possível salvar: ' + err.message);
+  }
+}
+window.toggleCancelado = toggleCancelado;
 
 /* ---------------- carregar dados ---------------- */
 async function loadAll(){

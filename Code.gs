@@ -26,7 +26,8 @@ var HEADERS = [
   'status', 'diretor', 'dataAprovacao', 'assinatura',
   'pecaEscolhidaJSON', 'maoObraEscolhidaJSON', 'tratativasJSON',
   'placa', 'km', 'unidade',
-  'realizado', 'dataRealizado'
+  'realizado', 'dataRealizado',
+  'cancelado', 'dataCancelado', 'motivoCancelado'
 ];
 
 // Estados possíveis:
@@ -127,6 +128,7 @@ function doPost(e) {
       case 'checkPassword': return respond_(checarSenha_(data));
       case 'approve': return respond_(aprovarSolicitacao_(data));
       case 'marcarRealizado': return respond_(marcarRealizado_(data));
+      case 'marcarCancelado': return respond_(marcarCancelado_(data));
       case 'devolver': return respond_(devolverSolicitacao_(data));
       case 'responder': return respond_(responderSolicitacao_(data));
       case 'delete': return respond_(excluirSolicitacao_(data));
@@ -209,7 +211,7 @@ function criarSolicitacao_(data) {
   // nativos do Sheets (o que causava o bug de fuso horário / texto quebrado).
   sh.getRange(newRow, 3, 1, 2).setNumberFormat('@');
 
-  sh.getRange(newRow, 1, 1, HEADERS.length).setValues([[
+  var linha = [
     id,
     numero,
     now.toISOString(),
@@ -231,7 +233,11 @@ function criarSolicitacao_(data) {
     data.placa || '',
     data.km || '',
     data.unidade || ''
-  ]]);
+  ];
+  // Completa com vazios até o total de colunas do cabeçalho. Assim, sempre que
+  // uma coluna nova for adicionada em HEADERS, a gravação não quebra mais.
+  while (linha.length < HEADERS.length) linha.push('');
+  sh.getRange(newRow, 1, 1, HEADERS.length).setValues([linha]);
   return { ok: true, id: id, numero: numero };
 }
 
@@ -291,6 +297,9 @@ function marcarRealizado_(data) {
       return { ok: false, error: 'Só é possível marcar como realizado uma solicitação já aprovada.' };
     }
     var feito = (data.realizado === true || data.realizado === 'true');
+    if (feito && sh.getRange(row, 24).getValue() === 'Sim') {
+      return { ok: false, error: 'Esta solicitação está cancelada. Desfaça o cancelamento antes de marcar como realizada.' };
+    }
     sh.getRange(row, 23).setNumberFormat('@'); // dataRealizado como texto
     if (feito) {
       sh.getRange(row, 22).setValue('Sim');
@@ -298,6 +307,33 @@ function marcarRealizado_(data) {
     } else {
       sh.getRange(row, 22).setValue('');
       sh.getRange(row, 23).setValue('');
+    }
+    return { ok: true };
+  });
+}
+
+// Marca (ou desmarca) uma solicitação APROVADA como "cancelada".
+// Grava nas colunas 24 (cancelado), 25 (dataCancelado) e 26 (motivoCancelado).
+// Cancelar limpa a marcação de "realizado" — as duas são excludentes.
+function marcarCancelado_(data) {
+  return withLock_(function () {
+    var sh = sheet_();
+    var row = findRow_(sh, data.id);
+    if (row === -1) return { ok: false, error: 'Solicitação não encontrada.' };
+    if (sh.getRange(row, 12).getValue() !== ST_APROVADO) {
+      return { ok: false, error: 'Só é possível cancelar uma solicitação já aprovada.' };
+    }
+    var cancelar = (data.cancelado === true || data.cancelado === 'true');
+    sh.getRange(row, 25).setNumberFormat('@'); // dataCancelado como texto
+    if (cancelar) {
+      sh.getRange(row, 22, 1, 5).setValues([[
+        '', '',                          // limpa realizado / dataRealizado
+        'Sim',
+        new Date().toISOString(),
+        data.motivo || ''
+      ]]);
+    } else {
+      sh.getRange(row, 24, 1, 3).setValues([['', '', '']]);
     }
     return { ok: true };
   });
