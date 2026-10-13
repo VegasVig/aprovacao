@@ -707,7 +707,7 @@
   .mnt-acoes{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
 
   /* tabela responsiva (vira lista empilhada em tela estreita) */
-  .mnt-tabela-wrap{border:1px solid var(--line-soft);border-radius:8px;background:rgba(4,8,12,.45);overflow:hidden;}
+  .mnt-tabela-wrap{border:1px solid var(--line-soft);border-radius:8px;background:rgba(4,8,12,.45);overflow-x:auto;}
   .mnt-tabela{width:100%;border-collapse:collapse;font-size:13px;}
   .mnt-tabela th{text-align:left;font-weight:500;font-size:12px;color:var(--muted);padding:9px 12px;border-bottom:1px solid var(--line-soft);white-space:nowrap;}
   .mnt-tabela td{padding:10px 12px;border-bottom:1px solid var(--line-soft);color:var(--silver);vertical-align:middle;}
@@ -720,7 +720,7 @@
   .mnt-neg{color:#ff6b70;} .mnt-warn{color:var(--warn);} .mnt-ok{color:var(--ok);}
   .mnt-v small{display:block;font-size:12px;color:var(--muted);}
   .mnt-tabela td.mnt-v{min-width:150px;}
-  @container mnt (max-width:700px){
+  @container mnt (max-width:760px){
     .mnt-tabela thead{display:none;}
     .mnt-tabela tr{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;padding:12px 14px;border-bottom:1px solid var(--line-soft);}
     .mnt-tabela td{border:none;padding:0;}
@@ -3102,6 +3102,7 @@ function mntDataHora(iso) {
   const d = new Date(s);
   return isNaN(d) ? fmtDate(s) : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
+function mntData(d) { return d ? fmtDate(d) : 'sem data'; }
 function mntStatusHtml(st) { return `<span class="mnt-st ${st}">${MNT_ST_TXT[st] || st}</span>`; }
 function mntNomeItem(item, v) {
   if (item === 'comando') return v && v.comando === 'correia' ? 'Correia dentada' : v && v.comando === 'corrente' ? 'Corrente de comando' : 'Correia/corrente de comando';
@@ -3292,7 +3293,7 @@ function mntRenderPendencias() {
         <td class="num" data-l="Km atual">${mntKm(it.kmRef)}</td>
         <td class="num" data-l="Km prevista">${mntKm(it.proximaKm)}</td>
         <td class="num ${cls}" data-l="Restante / excedido">${mntRestanteTxt(it)}</td>
-        <td data-l="Última manutenção">${it.ultima ? fmtDate(it.ultima.data) : '—'}</td>
+        <td data-l="Última manutenção">${it.ultima ? mntData(it.ultima.data) : '—'}</td>
         <td data-l="Situação">${mntStatusHtml(it.status)}</td>
         <td class="full"><button type="button" class="btn btn-ghost btn-sm" onclick="mntAbrirFicha('${v.id}')">Abrir ficha</button></td>
       </tr>`;
@@ -3355,7 +3356,7 @@ function mntTabelaRegsHtml(regs, { comViatura, comExcluir }) {
       const exc = r.excluido === 'Sim';
       const comp = r.comprovante ? ` <a href="${escapeHtml(r.comprovante)}" target="_blank" rel="noopener" class="comp-link" title="Ver nota fiscal ou comprovante">📎</a>` : '';
       return `<tr class="${exc ? 'excluido' : ''}">
-        <td data-l="Data">${fmtDate(r.data)}</td>
+        <td data-l="Data">${mntData(r.data)}</td>
         ${comViatura ? `<td class="mnt-v" data-l="Viatura"><span class="forte">${escapeHtml(v ? v.veiculo : r.veiculo)}</span><small>${escapeHtml(r.placa || '')}</small></td>` : ''}
         <td class="full" data-l="Serviço">${escapeHtml(mntServicoTxt(r))}${comp}</td>
         <td class="num" data-l="Km">${mntKm(r.km)}</td>
@@ -3398,7 +3399,7 @@ function mntLinhasExport(regs) {
   return regs.map(r => {
     const v = mntVeic(r.veiculoId);
     return {
-      'Data': fmtDate(r.data), 'Viatura': v ? v.veiculo : r.veiculo, 'Placa': r.placa || (v ? v.placa : ''),
+      'Data': mntData(r.data), 'Viatura': v ? v.veiculo : r.veiculo, 'Placa': r.placa || (v ? v.placa : ''),
       'Serviço': mntServicoTxt(r), 'Km': r.km, 'Oficina / responsável': r.oficina || '',
       'Custo (R$)': r.valor != null ? Number(r.valor) : '', 'Observações': r.obs || '', 'Comprovante': r.comprovante || '',
       'Situação': r.excluido === 'Sim' ? 'Excluído: ' + r.motivoExclusao : 'Válido'
@@ -3484,7 +3485,7 @@ function mntExportPdf(regs, titulo, filtroTxt, nomeArq) {
   cab();
   regs.forEach(r => {
     const v = mntVeic(r.veiculoId);
-    const vals = [fmtDate(r.data), v ? v.veiculo : r.veiculo, r.placa || '', mntServicoTxt(r) + (r.excluido === 'Sim' ? ' [EXCLUÍDO]' : ''),
+    const vals = [mntData(r.data), v ? v.veiculo : r.veiculo, r.placa || '', mntServicoTxt(r) + (r.excluido === 'Sim' ? ' [EXCLUÍDO]' : ''),
       r.km != null ? Number(r.km).toLocaleString('pt-BR') : '', r.oficina || '', r.valor != null ? fmtBRL(r.valor) : '', r.obs || ''];
     const linhas = vals.map((t, i) => doc.splitTextToSize(String(t), cols[i].w - 8));
     const h = Math.max(...linhas.map(l => l.length)) * 10 + 5;
@@ -3548,7 +3549,7 @@ function mntItemCardHtml(v, it) {
   const u = it.ultima;
   const prev = mntPrevisaoData(it.restante, v.kmDia);
   const dl = `<dl class="mnt-dl">
-    <dt>Última troca</dt><dd>${u ? fmtDate(u.data) : '—'}</dd>
+    <dt>Última troca</dt><dd>${u ? (u.data ? fmtDate(u.data) : 'data não informada') : '—'}</dd>
     <dt>Km da troca</dt><dd>${u ? mntKm(u.km) : '—'}</dd>
     <dt>Próxima troca</dt><dd>${mntKm(it.proximaKm)}</dd>
     ${prev ? `<dt>Data estimada</dt><dd>por volta de ${prev}</dd>` : ''}
@@ -4018,7 +4019,7 @@ $m('mntCfgGCancel').onclick = () => $m('mntCfgGOverlay').classList.remove('open'
 function mntAbrirExcluir(id) {
   const r = mntRegs().find(x => x.id === id); if (!r) return;
   MNT.delId = id;
-  $m('mntDelSub').textContent = `${mntServicoTxt(r)} · ${fmtDate(r.data)} · ${mntKm(r.km)}`;
+  $m('mntDelSub').textContent = `${mntServicoTxt(r)} · ${mntData(r.data)} · ${mntKm(r.km)}`;
   $m('mntDelMotivo').value = ''; mntPrepSenha('mntDelSenhaBox', 'mntDelSenha');
   $m('mntDelErr').textContent = '';
   $m('mntDelOverlay').classList.add('open');
