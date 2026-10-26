@@ -670,6 +670,19 @@
   .km-ref b{color:inherit;font-family:'JetBrains Mono',monospace;}
   .km-aviso{font-size:12.5px;color:#f2b632;min-height:0;margin-bottom:6px;}
   .km-aviso:empty{display:none;}
+  .fotos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+  .foto-slot{position:relative;aspect-ratio:1;border:1px dashed var(--line);background:var(--bg-alt);overflow:hidden;}
+  .foto-slot.empty{opacity:.35;}
+  .foto-slot img{width:100%;height:100%;object-fit:cover;display:block;}
+  .foto-slot.loading img{opacity:.5;}
+  .foto-add{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:100%;cursor:pointer;color:var(--muted);font-size:22px;}
+  .foto-add span{font-size:11px;}
+  .foto-add:hover{color:var(--live);}
+  .foto-add input{display:none;}
+  .foto-del{position:absolute;top:4px;right:4px;width:24px;height:24px;border:none;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;}
+  .foto-status{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);color:#fff;font-size:11px;text-align:center;padding:3px;}
+  .card-fotos{display:flex;gap:6px;margin:6px 0 10px;flex-wrap:wrap;}
+  .card-fotos img{width:72px;height:72px;object-fit:cover;border:1px solid var(--line);display:block;}
 </style>
 </head>
 <body>
@@ -744,6 +757,9 @@
         <div class="subhead">Descrição do Problema</div>
         <div id="descList"></div>
         <button type="button" class="add-link" id="addDesc">+ adicionar item</button>
+
+        <div class="subhead">Fotos do Defeito <span style="text-transform:none;font-weight:400;">(até 3, opcional)</span></div>
+        <div class="fotos-grid" id="fotosDefeito"></div>
 
         <div class="subhead">Fornecedor · Peça</div>
         <div id="pecasList"></div>
@@ -1251,6 +1267,77 @@ function wireComprovanteUpload(uploadBtn, textInput){
   });
 }
 
+/* ---------------- fotos do defeito (até 3) ---------------- */
+const MAX_FOTOS = 3;
+let fotosDefeito = [];
+let fotosEnviando = 0;
+
+function driveThumb(f){ return `https://drive.google.com/thumbnail?id=${encodeURIComponent(f.id)}&sz=w400`; }
+
+function renderFotosDefeito(){
+  const grid = document.getElementById('fotosDefeito');
+  grid.innerHTML = '';
+  for(let i = 0; i < MAX_FOTOS; i++){
+    const f = fotosDefeito[i];
+    const slot = document.createElement('div');
+    slot.className = 'foto-slot';
+    if(f){
+      if(f.loading) slot.classList.add('loading');
+      slot.innerHTML = `<img src="${escapeHtml(f.preview || driveThumb(f))}" alt="Foto ${i+1}">` +
+        (f.loading ? '<span class="foto-status">Enviando...</span>' : '<button type="button" class="foto-del" title="Remover">✕</button>');
+      const del = slot.querySelector('.foto-del');
+      if(del) del.onclick = () => { fotosDefeito = fotosDefeito.filter(x => x !== f); renderFotosDefeito(); };
+    } else if(i === fotosDefeito.length){
+      slot.innerHTML = '<label class="foto-add">📷<span>Adicionar foto</span><input type="file" accept="image/*"></label>';
+      slot.querySelector('input').addEventListener('change', e => enviarFotoDefeito(e.target.files[0]));
+    } else {
+      slot.classList.add('empty');
+    }
+    grid.appendChild(slot);
+  }
+}
+
+async function enviarFotoDefeito(file){
+  if(!file || fotosDefeito.length >= MAX_FOTOS) return;
+  let item = null;
+  fotosEnviando++;
+  try{
+    const preview = await fileToCompressedDataUrl(file);
+    item = {loading: true, preview};
+    fotosDefeito.push(item);
+    renderFotosDefeito();
+    const res = await api('uploadComprovante', {
+      base64: preview.split(',')[1], mimeType: 'image/jpeg',
+      filename: `defeito_${Date.now()}.jpg`, pasta: 'defeito'
+    });
+    if(!res.ok) throw new Error(res.error || 'Erro ao enviar a foto.');
+    Object.assign(item, {id: res.id, url: res.url, loading: false});
+  } catch(err){
+    if(item) fotosDefeito = fotosDefeito.filter(x => x !== item);
+    toast(err.message || 'Não foi possível processar a imagem.', true);
+  } finally {
+    fotosEnviando--;
+    renderFotosDefeito();
+  }
+}
+
+function setFotosDefeito(lista){
+  fotosDefeito = (lista || []).filter(f => f && f.id).slice(0, MAX_FOTOS).map(f => ({id: f.id, url: f.url}));
+  renderFotosDefeito();
+}
+
+function getFotosDefeito(){
+  return fotosDefeito.filter(f => f.id && !f.loading).map(({id, url}) => ({id, url}));
+}
+
+function fotosHtml(r){
+  const fotos = (r.fotos || []).filter(f => f && f.id);
+  if(!fotos.length) return '';
+  return `<div class="card-fotos">${fotos.map((f, i) =>
+    `<a href="${escapeHtml(f.url)}" target="_blank" rel="noopener" title="Foto do defeito ${i+1}"><img src="${escapeHtml(driveThumb(f))}" alt="Foto do defeito ${i+1}" loading="lazy" onerror="this.replaceWith(document.createTextNode('📷 ${i+1}'))"></a>`
+  ).join('')}</div>`;
+}
+
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -1273,6 +1360,7 @@ function resetForm(){
   const placa = document.getElementById('fPlaca');
   if(placa){ placa.value = ''; placa.readOnly = false; }
   addDescRow(); addSupplierRow('pecasList'); addSupplierRow('maoObraList');
+  setFotosDefeito([]);
 }
 
 /* ---------------- toggle painel do formulário ---------------- */
@@ -1334,6 +1422,7 @@ function openEdit(id){
   document.getElementById('fUnidade').value = r.unidade || 'Volta Redonda';
   document.getElementById('fKm').value = (r.km != null ? r.km : '');
   document.getElementById('fObs').value = r.obs || '';
+  setFotosDefeito(r.fotos);
 
   (r.descricao && r.descricao.length ? r.descricao : ['']).forEach(d=>addDescRow(d));
   (r.pecas && r.pecas.length ? r.pecas : [{}]).forEach(p=>addSupplierRow('pecasList', p));
@@ -1352,6 +1441,10 @@ document.getElementById('reqForm').onsubmit = async (e) => {
   if(!km){
     document.getElementById('fKm').focus();
     toast('A quilometragem é obrigatória.');
+    return;
+  }
+  if(fotosEnviando){
+    toast('Aguarde o envio das fotos terminar.');
     return;
   }
   const descricao = [...document.querySelectorAll('#descList input')].map(i=>i.value.trim()).filter(Boolean);
@@ -1377,6 +1470,7 @@ document.getElementById('reqForm').onsubmit = async (e) => {
     unidade: document.getElementById('fUnidade').value,
     km: km,
     descricao, pecas, maoObra,
+    fotos: getFotosDefeito(),
     obs: document.getElementById('fObs').value.trim()
   };
 
@@ -1539,6 +1633,7 @@ function renderPend(){
         <span><b>Quilometragem:</b> ${r.km!=null&&r.km!==''?escapeHtml(String(r.km)):'—'}</span>
       </div>
       <ol class="desc-list">${(r.descricao||[]).map(d=>`<li>${escapeHtml(d)}</li>`).join('')}</ol>
+      ${fotosHtml(r)}
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px;">Fornecedor Peça</div>
       ${priceRowsHtml(r.pecas)}
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:10px 0 4px;">Fornecedor Mão de Obra</div>
@@ -1627,6 +1722,7 @@ function renderDash(){
         <span><b>Quilometragem:</b> ${r.km!=null&&r.km!==''?escapeHtml(String(r.km)):'—'}</span>
       </div>
       <ol class="desc-list">${(r.descricao||[]).map(d=>`<li>${escapeHtml(d)}</li>`).join('')}</ol>
+      ${fotosHtml(r)}
       ${chosenSupplierHtml('Fornecedor Peça', r.pecaEscolhida)}
       ${chosenSupplierHtml('Fornecedor Mão de Obra', r.maoObraEscolhida)}
       <div class="approved-tag">
@@ -2498,6 +2594,12 @@ function buildPdf(r, pix){
   doc.setFont('helvetica','bold'); doc.text('Descrição do Problema:', marginX, y); y += 16;
   doc.setFont('helvetica','normal');
   (r.descricao||[]).forEach((d,i)=>{ doc.text(`${i+1}- ${d}`, marginX+10, y); y += 14; });
+  const fotosPdf = (r.fotos || []).filter(f => f && f.url);
+  if(fotosPdf.length){
+    doc.setTextColor(30, 90, 200);
+    fotosPdf.forEach((f, i) => { doc.textWithLink(`Foto do defeito ${i+1} (abrir)`, marginX+10, y, {url: f.url}); y += 14; });
+    doc.setTextColor(0, 0, 0);
+  }
   y += 8;
 
   function chosenLine(title, item){

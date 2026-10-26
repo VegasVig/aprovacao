@@ -27,7 +27,8 @@ var HEADERS = [
   'pecaEscolhidaJSON', 'maoObraEscolhidaJSON', 'tratativasJSON',
   'placa', 'km', 'unidade',
   'realizado', 'dataRealizado',
-  'cancelado', 'dataCancelado', 'motivoCancelado'
+  'cancelado', 'dataCancelado', 'motivoCancelado',
+  'fotosJSON'
 ];
 
 // Estados possíveis:
@@ -178,6 +179,8 @@ function rowToObj_(row, headers) {
   });
   try { obj.tratativas = obj.tratativasJSON ? JSON.parse(obj.tratativasJSON) : []; }
   catch (e) { obj.tratativas = []; }
+  try { obj.fotos = obj.fotosJSON ? JSON.parse(obj.fotosJSON) : []; }
+  catch (e) { obj.fotos = []; }
   return obj;
 }
 
@@ -238,6 +241,7 @@ function criarSolicitacao_(data) {
   // Completa com vazios até o total de colunas do cabeçalho. Assim, sempre que
   // uma coluna nova for adicionada em HEADERS, a gravação não quebra mais.
   while (linha.length < HEADERS.length) linha.push('');
+  linha[HEADERS.indexOf('fotosJSON')] = JSON.stringify(sanitizarFotos_(data.fotos));
   sh.getRange(newRow, 1, 1, HEADERS.length).setValues([linha]);
   return { ok: true, id: id, numero: numero };
 }
@@ -271,6 +275,9 @@ function editarSolicitacao_(data) {
   if (data.placa !== undefined) sh.getRange(row, 19).setValue(data.placa || '');
   if (data.km !== undefined) { sh.getRange(row, 20).setNumberFormat('@'); sh.getRange(row, 20).setValue(data.km || ''); }
   if (data.unidade !== undefined) sh.getRange(row, 21).setValue(data.unidade || '');
+  if (data.fotos !== undefined) {
+    sh.getRange(row, HEADERS.indexOf('fotosJSON') + 1).setValue(JSON.stringify(sanitizarFotos_(data.fotos)));
+  }
   return { ok: true };
 }
 
@@ -548,7 +555,7 @@ function uploadComprovante_(data) {
   if (!data.base64) return { ok: false, error: 'Arquivo vazio.' };
   var mimeType = data.mimeType || 'image/jpeg';
   var nome = data.filename || ('comprovante_' + Utilities.getUuid() + '.jpg');
-  var folder = pastaComprovantes_();
+  var folder = data.pasta === 'defeito' ? pastaFotosDefeito_() : pastaComprovantes_();
 
   var blob;
   try {
@@ -565,6 +572,30 @@ function uploadComprovante_(data) {
   } catch (e) { /* conta pessoal sem domínio: mantém padrão */ }
 
   return { ok: true, url: file.getUrl(), id: file.getId() };
+}
+
+// ---------- FOTOS DO DEFEITO ----------
+// Até 3 fotos por solicitação. Vão para pasta própria no Drive; na planilha
+// fica só a lista {id, url} na coluna fotosJSON.
+function pastaFotosDefeito_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('PASTA_FOTOS_DEFEITO_ID');
+  if (id) {
+    try { return DriveApp.getFolderById(id); } catch (e) { /* pasta apagada: recria */ }
+  }
+  var nome = 'Vegas - Fotos do Defeito';
+  var it = DriveApp.getFoldersByName(nome);
+  var folder = it.hasNext() ? it.next() : DriveApp.createFolder(nome);
+  props.setProperty('PASTA_FOTOS_DEFEITO_ID', folder.getId());
+  return folder;
+}
+
+function sanitizarFotos_(fotos) {
+  if (!Array.isArray(fotos)) return [];
+  return fotos
+    .filter(function (f) { return f && f.id && f.url; })
+    .slice(0, 3)
+    .map(function (f) { return { id: String(f.id), url: String(f.url) }; });
 }
 
 // ---------- NOTIFICAÇÃO (opcional) ----------
