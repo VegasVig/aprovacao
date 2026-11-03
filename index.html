@@ -498,6 +498,16 @@
     .car-detail{padding:2px 14px 16px 14px;}
   }
   @media (max-width:520px){ .kpi-row{grid-template-columns:1fr;} }
+  .base-split{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px;}
+  @media (max-width:520px){ .base-split{grid-template-columns:1fr;} }
+  .base-card{all:unset;display:block;box-sizing:border-box;cursor:pointer;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);}
+  .base-card:hover{border-color:rgba(255,255,255,.2);}
+  .base-card.on{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok) inset;}
+  .base-card .b-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;color:var(--muted);}
+  .base-card .b-val{font-size:20px;font-weight:500;color:var(--silver-bright);margin-top:4px;font-variant-numeric:tabular-nums;}
+  .base-card .b-sub{font-size:12px;color:var(--silver);margin-top:3px;}
+  .base-card .b-bar{height:4px;border-radius:2px;background:rgba(255,255,255,.08);margin-top:8px;overflow:hidden;}
+  .base-card .b-bar i{display:block;height:100%;background:var(--ok);}
 
   /* =====================================================================
      CASCA DO APP — igual à tela de referência
@@ -817,6 +827,14 @@
         </div>
         <div class="periodo-box">
           <div class="field">
+            <label for="dashBase">Base</label>
+            <select id="dashBase" onchange="renderDash()">
+              <option value="">Todas as bases</option>
+              <option value="Volta Redonda">Volta Redonda</option>
+              <option value="Niterói">Niterói</option>
+            </select>
+          </div>
+          <div class="field">
             <label>Período</label>
             <select id="dashPeriodo" onchange="onPeriodoChange()">
               <option value="todos">Todo o período</option>
@@ -838,6 +856,7 @@
         </div>
       </div>
       <div class="err-msg" id="perErr" style="margin:-8px 0 12px;"></div>
+      <div class="base-split" id="baseSplit"></div>
       <div class="kpi-row" id="kpiRow"></div>
       <div class="facet-panel frota-panel">
         <div class="frota-legend">
@@ -1630,6 +1649,7 @@ function renderPend(){
         <span><b>Data:</b> ${fmtDate(r.data)}</span>
         <span><b>Solicitante:</b> ${escapeHtml(r.solicitante)}</span>
         <span><b>Setor:</b> ${escapeHtml(r.setor)}</span>
+        <span><b>Base:</b> ${baseDe(r)}</span>
         <span><b>Placa:</b> ${escapeHtml(r.placa||'—')}</span>
         <span><b>Quilometragem:</b> ${r.km!=null&&r.km!==''?escapeHtml(String(r.km)):'—'}</span>
       </div>
@@ -1691,9 +1711,9 @@ function renderDash(){
   const wrap = document.getElementById('dashList');
   const term = (document.getElementById('dashSearch')?.value || '').trim().toUpperCase();
   const carroSel = (document.getElementById('dashVeiculo')?.value || '').trim();
-  let lista = term
+  let lista = (term
     ? aprovados.filter(r => String(r.placa||'').toUpperCase().includes(term))
-    : aprovados;
+    : aprovados).filter(daBase);
   if(carroSel){
     lista = lista.filter(r => String(r.veiculo||'').trim().toLowerCase() === carroSel.toLowerCase());
   }
@@ -1719,7 +1739,7 @@ function renderDash(){
         <span><b>Solicitante:</b> ${escapeHtml(r.solicitante)}</span>
         <span><b>Setor:</b> ${escapeHtml(r.setor)}</span>
         <span><b>Placa:</b> ${escapeHtml(r.placa||'—')}</span>
-        <span><b>Unidade:</b> ${escapeHtml(r.unidade||'—')}</span>
+        <span><b>Base:</b> ${baseDe(r)}</span>
         <span><b>Quilometragem:</b> ${r.km!=null&&r.km!==''?escapeHtml(String(r.km)):'—'}</span>
       </div>
       <ol class="desc-list">${(r.descricao||[]).map(d=>`<li>${escapeHtml(d)}</li>`).join('')}</ol>
@@ -1766,6 +1786,11 @@ function nomePeca(txt){
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 }
 function dataRef(r){ return String(r.data || r.dataAprovacao || '').split('T')[0]; }
+// Regra da operação: pedidos do Vitor = Niterói; todos os demais = Volta Redonda.
+const BASES = ['Volta Redonda', 'Niterói'];
+function baseDe(r){ return /\bvitor\b/.test(normTxt(r.solicitante)) ? 'Niterói' : 'Volta Redonda'; }
+function baseSel(){ return document.getElementById('dashBase')?.value || ''; }
+function daBase(r){ const b = baseSel(); return !b || baseDe(r) === b; }
 function dentroPeriodo(r, per){
   if(per === 'todos') return true;
   const d = dataRef(r);
@@ -1790,7 +1815,7 @@ function dentroPeriodo(r, per){
 function calcularGastosPorCarro(per){
   const mapa = new Map();
   aprovados
-    .filter(r => r.cancelado !== 'Sim' && dentroPeriodo(r, per))
+    .filter(r => r.cancelado !== 'Sim' && dentroPeriodo(r, per) && daBase(r))
     .forEach(r => {
       const k = chaveCarro(r);
       if(!mapa.has(k)) mapa.set(k, {key:k, veiculo:r.veiculo||'—', placa:String(r.placa||'').toUpperCase().trim(),
@@ -1846,12 +1871,14 @@ function renderFrota(){
     const de = document.getElementById('dashDe').value, ate = document.getElementById('dashAte').value;
     if(de && ate && de > ate){
       perErr.textContent = 'A data "De" está depois da data "Até". Ajuste o intervalo.';
+      document.getElementById('baseSplit').innerHTML = '';
       kpiEl.innerHTML = '';
       rankEl.innerHTML = '';
       frotaAtual = [];
       return;
     }
   }
+  renderBaseSplit(per);
   const lista = calcularGastosPorCarro(per);
   frotaAtual = lista;
 
@@ -1877,7 +1904,7 @@ function renderFrota(){
   const pctTop = totalFrota ? Math.round(top.total / totalFrota * 100) : 0;
   kpiEl.innerHTML = `
     <div class="kpi">
-      <div class="k-lbl">Gasto total da frota</div>
+      <div class="k-lbl">Gasto total ${baseSel() ? '— ' + baseSel() : 'da frota'}</div>
       <div class="k-val">${fmtBRL(totalFrota)}</div>
       <div class="k-sub">${totalServ} ficha${totalServ===1?'':'s'} em ${lista.length} carro${lista.length===1?'':'s'}</div>
     </div>
@@ -1947,6 +1974,33 @@ function renderFrota(){
   }).join('');
 }
 
+function renderBaseSplit(per){
+  const el = document.getElementById('baseSplit');
+  const validos = aprovados.filter(r => r.cancelado !== 'Sim' && dentroPeriodo(r, per));
+  const tot = Object.fromEntries(BASES.map(b => [b, {peca:0, mo:0, total:0, n:0}]));
+  validos.forEach(r => {
+    const t = totaisAprovados(r), b = tot[baseDe(r)];
+    b.peca += t.peca; b.mo += t.mo; b.total += t.total; b.n++;
+  });
+  const geral = BASES.reduce((s,b)=> s + tot[b].total, 0);
+  const sel = baseSel();
+  el.innerHTML = BASES.map(b => {
+    const t = tot[b], pct = geral ? Math.round(t.total / geral * 100) : 0;
+    return `<button type="button" class="base-card${sel===b?' on':''}" onclick="filtrarBase('${b}')" title="Clique para filtrar ${b}">
+      <div class="b-top"><span>${b}</span><span>${pct}%</span></div>
+      <div class="b-val">${fmtBRL(t.total)}</div>
+      <div class="b-sub">${t.n} ficha${t.n===1?'':'s'} · Peças ${fmtBRL(t.peca)} · M.O. ${fmtBRL(t.mo)}</div>
+      <div class="b-bar"><i style="width:${pct}%"></i></div>
+    </button>`;
+  }).join('');
+}
+function filtrarBase(b){
+  const sel = document.getElementById('dashBase');
+  sel.value = sel.value === b ? '' : b;
+  renderDash();
+}
+window.filtrarBase = filtrarBase;
+
 function toggleCarro(btn){
   const row = btn.closest('.car-row');
   const aberto = row.classList.toggle('open');
@@ -1976,6 +2030,7 @@ function verFichasCarro(i){
 document.getElementById('dashLimpar').onclick = () => {
   document.getElementById('dashSearch').value = '';
   document.getElementById('dashVeiculo').value = '';
+  document.getElementById('dashBase').value = '';
   renderDash();
 };
 
